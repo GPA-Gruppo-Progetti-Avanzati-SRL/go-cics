@@ -45,15 +45,15 @@ func CloseConnectionPool() {
 	p.Close(ctx)
 }
 
-func GetConnection() *Connection {
+func GetConnection() (*Connection, error) {
 	cicsConnection, err := p.BorrowObject(ctx)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	connection := cicsConnection.(*Connection)
-	return connection
+	return connection, nil
 }
 
-func ReturnConnection(cicsConnection *Connection) {
-	p.ReturnObject(ctx, cicsConnection)
+func ReturnConnection(cicsConnection *Connection) error {
+	return p.ReturnObject(ctx, cicsConnection)
 }

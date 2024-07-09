@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"github.com/rs/zerolog/log"
 	"net"
@@ -34,8 +35,10 @@ type ConnectionFactory struct {
 func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject, error) {
 	ptr := C.malloc(C.sizeof_char * 1024)
 	C.memset(ptr, C.int(C.sizeof_char*1024), 0)
-	f.getCicsServer((*C.CTG_ConnToken_t)(ptr))
-
+	err := f.getCicsServer((*C.CTG_ConnToken_t)(ptr))
+	if err != nil {
+		return nil, err
+	}
 	return pool.NewPooledObject(
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
@@ -64,7 +67,7 @@ func (f *ConnectionFactory) PassivateObject(ctx context.Context, object *pool.Po
 	return nil
 }
 
-func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) {
+func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) error {
 	var hostname *C.char
 	var port C.int
 	if f.Config.UseProxy {
@@ -78,10 +81,10 @@ func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) {
 	ctgrg := C.CTG_openRemoteGatewayConnection(hostname, port, ptr, C.int(f.Config.Timeout))
 	if ctgrg == C.CTG_OK {
 		log.Info().Msg("Connessione CICS Avvenuta con successo")
-		return
+		return nil
 	} else {
 		displayRc(ctgrg)
-		log.Fatal().Msg("Errore connessione CTG")
+		return errors.New("Errore connessione CTG")
 	}
 
 }

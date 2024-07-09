@@ -103,7 +103,7 @@ func closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnToken_t) {
 
 }
 
-func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) func() {
+func Encrypt(connectionConfig *ConnectionConfig, ready chan bool, errCh chan<- error) {
 	localAddr := "127.0.0.1:" + strconv.Itoa(connectionConfig.ProxyPort)
 	log.Info().Msgf("Listening: %v\nProxying & Encrypting: %v\n\n", localAddr, connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port))
 	log.Info().Msgf("Reading %v as certificate, %v as key and %v as root certificate", connectionConfig.SSLClientCertificate, connectionConfig.SSLClientKey, connectionConfig.SSLRootCaCertificate)
@@ -123,7 +123,8 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) func() {
 	}
 	listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
-		panic(err)
+		errCh <- err
+		return
 	}
 	ready <- true
 	defer func() {
@@ -137,31 +138,37 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) func() {
 			log.Error().Err(err).Msgf("error accepting connection %s", err.Error())
 			continue
 		}
-		go func() {
-			i := atomic.AddUint64(&ops, 1)
-			conn2, err := tls.Dial("tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
-			defer conn.Close()
-			defer conn2.Close()
-
-			if err != nil {
-				log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
-				return
-			}
-
-			err = conn2.Handshake()
-			if err != nil {
-				log.Error().Err(err).Msgf("failed to complete handshake: %s\n", err.Error())
-				return
-			}
-			log.Info().Msgf("%d connect [%s -> %s]", i, conn2.LocalAddr(), conn2.RemoteAddr())
-
-			if len(conn2.ConnectionState().PeerCertificates) > 0 {
-				log.Info().Msgf("client common name: %+v", conn2.ConnectionState().PeerCertificates[0].Subject.CommonName)
-			}
-			Pipe(conn, conn2)
-		}()
+		go startListener(connectionConfig, ops, tlsConfig, conn, errCh)
 
 	}
+}
+
+func startListener(connectionConfig *ConnectionConfig, ops uint64, tlsConfig *tls.Config, conn net.Conn, errCh chan<- error) {
+
+	i := atomic.AddUint64(&ops, 1)
+	conn2, err := tls.Dial("tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
+	defer conn.Close()
+	defer conn2.Close()
+
+	if err != nil {
+		log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
+		errCh <- err
+		return
+	}
+
+	err = conn2.Handshake()
+	if err != nil {
+		log.Error().Err(err).Msgf("failed to complete handshake: %s\n", err.Error())
+		errCh <- err
+		return
+	}
+	log.Info().Msgf("%d connect [%s -> %s]", i, conn2.LocalAddr(), conn2.RemoteAddr())
+
+	if len(conn2.ConnectionState().PeerCertificates) > 0 {
+		log.Info().Msgf("client common name: %+v", conn2.ConnectionState().PeerCertificates[0].Subject.CommonName)
+	}
+	Pipe(conn, conn2)
+	return
 }
 
 func chanFromConn(conn net.Conn) chan []byte {

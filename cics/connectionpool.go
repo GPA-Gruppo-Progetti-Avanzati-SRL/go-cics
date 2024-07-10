@@ -79,7 +79,6 @@ func ChannelClosure(channel chan *C.ECI_ChannelToken_t) {
 			log.Error().Err(err).Msgf("ECI_deleteChannel call failed : %v", err)
 		}
 		log.Info().Msg("Canale Eliminato")
-		C.free(unsafe.Pointer(val))
 	}
 }
 

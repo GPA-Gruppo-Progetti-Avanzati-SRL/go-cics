@@ -18,7 +18,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -132,21 +131,19 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) {
 		log.Info().Msg("Closing Proxy Socket")
 		listener.Close()
 	}()
-	var ops uint64
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Error().Err(err).Msgf("error accepting connection %s", err.Error())
 			continue
 		}
-		go startListener(connectionConfig, ops, tlsConfig, conn)
+		go startListener(connectionConfig, tlsConfig, conn)
 
 	}
 }
 
-func startListener(connectionConfig *ConnectionConfig, ops uint64, tlsConfig *tls.Config, conn net.Conn) {
+func startListener(connectionConfig *ConnectionConfig, tlsConfig *tls.Config, conn net.Conn) {
 	defer conn.Close()
-	i := atomic.AddUint64(&ops, 1)
 	conn2, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Duration(connectionConfig.Timeout) * time.Second}, "tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
 	if err != nil {
 		log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
@@ -158,7 +155,7 @@ func startListener(connectionConfig *ConnectionConfig, ops uint64, tlsConfig *tl
 		log.Error().Err(err).Msgf("failed to complete handshake: %s\n", err.Error())
 		return
 	}
-	log.Info().Msgf("%d connect [%s -> %s]", i, conn2.LocalAddr(), conn2.RemoteAddr())
+	log.Info().Msgf("connect [%s -> %s]", conn2.LocalAddr(), conn2.RemoteAddr())
 
 	if len(conn2.ConnectionState().PeerCertificates) > 0 {
 		log.Info().Msgf("client common name: %+v", conn2.ConnectionState().PeerCertificates[0].Subject.CommonName)

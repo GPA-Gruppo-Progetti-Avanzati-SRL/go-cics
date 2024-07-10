@@ -51,12 +51,20 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.PooledObject) error {
 
 	o := object.Object.(*Connection)
-	closeGatewayConnection(o.ConnectionToken)
-	defer C.free(unsafe.Pointer(o.ConnectionToken))
+	if o.ConnectionToken != nil {
+		closeGatewayConnection(o.ConnectionToken)
+		defer C.free(unsafe.Pointer(o.ConnectionToken))
+	}
+
 	return nil
 }
 
 func (f *ConnectionFactory) ValidateObject(ctx context.Context, object *pool.PooledObject) bool {
+	log.Trace().Msg("ValidateObject")
+	o := object.Object.(*Connection)
+	if o.ConnectionToken == nil {
+		return false
+	}
 	return true
 }
 
@@ -106,7 +114,7 @@ func closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnToken_t) {
 
 func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) {
 	localAddr := "127.0.0.1:" + strconv.Itoa(connectionConfig.ProxyPort)
-	log.Info().Msgf("Listening: %v\nProxying & Encrypting: %v\n\n", localAddr, connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port))
+	log.Info().Msgf("Listening: %v - Proxying & Encrypting: %v", localAddr, connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port))
 	log.Info().Msgf("Reading %v as certificate, %v as key and %v as root certificate", connectionConfig.SSLClientCertificate, connectionConfig.SSLClientKey, connectionConfig.SSLRootCaCertificate)
 	cert, err := tls.LoadX509KeyPair(connectionConfig.SSLClientCertificate, connectionConfig.SSLClientKey)
 	caCert, err := os.ReadFile(connectionConfig.SSLRootCaCertificate)

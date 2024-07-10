@@ -104,7 +104,7 @@ func closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnToken_t) {
 
 }
 
-func Encrypt(connectionConfig *ConnectionConfig, ready chan bool, errCh chan<- error) {
+func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) {
 	localAddr := "127.0.0.1:" + strconv.Itoa(connectionConfig.ProxyPort)
 	log.Info().Msgf("Listening: %v\nProxying & Encrypting: %v\n\n", localAddr, connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port))
 	log.Info().Msgf("Reading %v as certificate, %v as key and %v as root certificate", connectionConfig.SSLClientCertificate, connectionConfig.SSLClientKey, connectionConfig.SSLRootCaCertificate)
@@ -124,7 +124,7 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool, errCh chan<- e
 	}
 	listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
-		errCh <- err
+		log.Fatal().Err(err).Msg("Failed to listen: " + err.Error())
 		return
 	}
 	ready <- true
@@ -139,25 +139,23 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool, errCh chan<- e
 			log.Error().Err(err).Msgf("error accepting connection %s", err.Error())
 			continue
 		}
-		go startListener(connectionConfig, ops, tlsConfig, conn, errCh)
+		go startListener(connectionConfig, ops, tlsConfig, conn)
 
 	}
 }
 
-func startListener(connectionConfig *ConnectionConfig, ops uint64, tlsConfig *tls.Config, conn net.Conn, errCh chan<- error) {
+func startListener(connectionConfig *ConnectionConfig, ops uint64, tlsConfig *tls.Config, conn net.Conn) {
 	defer conn.Close()
 	i := atomic.AddUint64(&ops, 1)
 	conn2, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Duration(connectionConfig.Timeout) * time.Second}, "tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
 	if err != nil {
 		log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
-		errCh <- err
 		return
 	}
 	defer conn2.Close()
 	err = conn2.Handshake()
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to complete handshake: %s\n", err.Error())
-		errCh <- err
 		return
 	}
 	log.Info().Msgf("%d connect [%s -> %s]", i, conn2.LocalAddr(), conn2.RemoteAddr())

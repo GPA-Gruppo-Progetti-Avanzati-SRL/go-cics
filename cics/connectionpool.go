@@ -31,17 +31,10 @@ func InitConnectionPool(config *ConnectionConfig) {
 			log.Debug().Msg("ProxyPort no setted setting default 18080")
 			config.ProxyPort = 18080
 		}
-		errCh := make(chan error, 3)
-		go Encrypt(config, proxyready, errCh)
+		go Encrypt(config, proxyready)
 		log.Info().Msg("Wait opening socket")
 		<-proxyready
 		log.Info().Msg("Socket opened")
-
-		for err := range errCh {
-			if err != nil {
-				log.Error().Msgf("Socket %s", err)
-			}
-		}
 
 	}
 

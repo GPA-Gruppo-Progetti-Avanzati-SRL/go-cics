@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -144,18 +145,15 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool, errCh chan<- e
 }
 
 func startListener(connectionConfig *ConnectionConfig, ops uint64, tlsConfig *tls.Config, conn net.Conn, errCh chan<- error) {
-
-	i := atomic.AddUint64(&ops, 1)
-	conn2, err := tls.Dial("tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
 	defer conn.Close()
-	defer conn2.Close()
-
+	i := atomic.AddUint64(&ops, 1)
+	conn2, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Duration(connectionConfig.Timeout) * time.Second}, "tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
 	if err != nil {
 		log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
 		errCh <- err
 		return
 	}
-
+	defer conn2.Close()
 	err = conn2.Handshake()
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to complete handshake: %s\n", err.Error())

@@ -39,7 +39,7 @@ func InitConnectionPool(config *ConnectionConfig) {
 
 		for err := range errCh {
 			if err != nil {
-				log.Error().Msgf("Routine %s", err)
+				log.Error().Msgf("Socket %s", err)
 			}
 		}
 

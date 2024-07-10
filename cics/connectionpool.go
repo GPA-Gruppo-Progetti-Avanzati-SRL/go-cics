@@ -21,8 +21,8 @@ var ctx = context.Background()
 
 func InitConnectionPool(config *ConnectionConfig) {
 	tokenChannel := make(chan *C.CTG_ConnToken_t, 5)
-
-	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config, TokenChannel: tokenChannel}, &pool.ObjectPoolConfig{
+	eciChannel := make(chan *C.ECI_ChannelToken_t)
+	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config, TokenChannel: tokenChannel, EciChannel: eciChannel}, &pool.ObjectPoolConfig{
 		LIFO:                     true,
 		MaxTotal:                 config.MaxTotal,
 		MaxIdle:                  config.MaxIdle,
@@ -48,6 +48,7 @@ func InitConnectionPool(config *ConnectionConfig) {
 	}
 
 	go ListeningClosure(tokenChannel)
+	go ChannelClosure(eciChannel)
 
 }
 
@@ -60,9 +61,21 @@ func ListeningClosure(tokenChannel chan *C.CTG_ConnToken_t) {
 		C.free(unsafe.Pointer(val))
 	}
 }
+func ChannelClosure(channel chan *C.ECI_ChannelToken_t) {
+	for {
+		val := <-channel
+		log.Info().Msg("Ricevuto Eci Token Procedo cancellazione canale")
+		ctgRc := C.ECI_deleteChannel(val)
+
+		if ctgRc != C.ECI_NO_ERROR {
+			err := displayRc(ctgRc)
+			log.Error().Err(err).Msgf("ECI_deleteChannel call failed : %v", err)
+		}
+		log.Info().Msg("Canale Eliminato")
+	}
+}
 
 func CloseConnectionPool() {
-
 	p.Close(ctx)
 }
 

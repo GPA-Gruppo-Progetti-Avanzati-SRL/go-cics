@@ -136,12 +136,9 @@ func (cr *Routine) getOutputContainer(token C.ECI_ChannelToken_t) *TransactionEr
 		}
 
 		cr.OutputContainer[containerName] = containerContentSlice
+		log.Trace().Msgf("OUTPUTCONTAINER , %s-%s*EOC*", containerName, containerContentSlice)
 		C.free(dataBuff)
 		ctgRc = C.ECI_getNextContainer(token, &contInfo)
-
-	}
-	for key2, element2 := range cr.OutputContainer {
-		log.Trace().Msgf("OUTPUTCONTAINER , %s-%s*EOC*", key2, element2)
 	}
 	return nil
 }
@@ -252,17 +249,6 @@ func strCopy4(dest *[4]C.char, src string) {
 	for i, c := range src {
 		dest[i] = C.char(c)
 	}
-}
-
-func deleteChannel(channelTokPtr *C.ECI_ChannelToken_t) {
-	log.Trace().Msg("Cancello Canale")
-	ctgRc := C.ECI_deleteChannel(channelTokPtr)
-
-	if ctgRc != C.ECI_NO_ERROR {
-		log.Error().Msg("ECI_deleteChannel call failed.")
-	}
-	log.Trace().Msg("Cancellato Canale")
-
 }
 
 func displayRc(ctgRc C.int) *TransactionError {

@@ -27,10 +27,12 @@ import (
 type Connection struct {
 	ConnectionToken *C.CTG_ConnToken_t
 	Config          *ConnectionConfig
+	TokenChannel    chan *C.CTG_ConnToken_t
 }
 
 type ConnectionFactory struct {
-	Config *ConnectionConfig
+	Config       *ConnectionConfig
+	TokenChannel chan *C.CTG_ConnToken_t
 }
 
 func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject, error) {
@@ -44,6 +46,7 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
 				Config:          f.Config,
+				TokenChannel:    f.TokenChannel,
 			}),
 		nil
 }
@@ -52,8 +55,7 @@ func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.Pool
 
 	o := object.Object.(*Connection)
 	if o.ConnectionToken != nil {
-		closeGatewayConnection(o.ConnectionToken)
-		defer C.free(unsafe.Pointer(o.ConnectionToken))
+		o.TokenChannel <- o.ConnectionToken
 	}
 
 	return nil

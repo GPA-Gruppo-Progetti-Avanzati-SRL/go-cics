@@ -1,18 +1,21 @@
 package cics
 
+import "C"
 import (
 	"context"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"github.com/rs/zerolog/log"
 	"time"
+	"unsafe"
 )
 
 var p *pool.ObjectPool
 var ctx = context.Background()
 
 func InitConnectionPool(config *ConnectionConfig) {
+	tokenChannel := make(chan *C.CTG_ConnToken_t)
 
-	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config}, &pool.ObjectPoolConfig{
+	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config, TokenChannel: tokenChannel}, &pool.ObjectPoolConfig{
 		LIFO:                     true,
 		MaxTotal:                 config.MaxTotal,
 		MaxIdle:                  config.MaxIdle,
@@ -35,8 +38,17 @@ func InitConnectionPool(config *ConnectionConfig) {
 		log.Info().Msg("Wait opening socket")
 		<-proxyready
 		log.Info().Msg("Socket opened")
-
 	}
+
+	go func() {
+		for {
+			log.Info().Msg("Ricevuto Token Procedo chiusura")
+			val := <-tokenChannel
+			closeGatewayConnection(val)
+			C.free(unsafe.Pointer(val))
+		}
+
+	}()
 
 }
 

@@ -99,12 +99,10 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
 		conntoken := cr.Connection.ConnectionToken
-		go func() {
-			log.Trace().Msg("chiudo connessione non valida")
-			cr.Connection.TokenChannel <- conntoken
-			log.Trace().Msg("chiusa connessione non valida")
+		log.Trace().Msg("chiudo connessione non valida")
+		cr.Connection.TokenChannel <- conntoken
+		log.Trace().Msg("chiusa connessione non valida")
 
-		}()
 		cr.Connection.ConnectionToken = nil
 		log.Trace().Msg("Visualizzo errore")
 		return displayRc(ctgRc)

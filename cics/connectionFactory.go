@@ -101,7 +101,7 @@ func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) error {
 }
 
 func closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnToken_t) {
-
+	log.Info().Msg("Chiudo Connessione")
 	/* Close connection to CICS TG */
 	ctgRc := C.CTG_closeGatewayConnection(gatewayTokenPtr)
 

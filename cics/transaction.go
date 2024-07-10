@@ -94,8 +94,10 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 
 	if ctgRc != C.ECI_NO_ERROR {
 		conntoken := cr.Connection.ConnectionToken
-		closeGatewayConnection(conntoken)
-		defer C.free(unsafe.Pointer(conntoken))
+		defer func() {
+			closeGatewayConnection(conntoken)
+			C.free(unsafe.Pointer(conntoken))
+		}()
 		cr.Connection.ConnectionToken = nil
 		return displayRc(ctgRc)
 	}

@@ -272,7 +272,7 @@ func displayRc(ctgRc C.int) *TransactionError {
 	C.CTG_getRcString(ctgRc, (*C.char)(ptr))
 	defer C.free(ptr)
 	returnString := C.GoBytes(ptr, C.sizeof_char*(C.CTG_MAX_RCSTRING+1))
-	fmt.Println("ErrorCode", ctgRc, "ErrorMessage", ClearString(string(returnString)))
+	log.Trace().Msgf("ErrorCode : %v ,ErrorMessage %s", ctgRc, ClearString(string(returnString)))
 	return &TransactionError{
 		ErrorCode: fmt.Sprintf("%v", ctgRc), ErrorMessage: ClearString(string(returnString)),
 	}

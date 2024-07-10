@@ -50,7 +50,13 @@ func GetConnection() (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	connection := cicsConnection.(*Connection)
+	if connection.ConnectionToken == nil {
+		log.Debug().Msg("ConnectionToken is nil invalidate")
+		p.InvalidateObject(ctx, cicsConnection)
+		GetConnection()
+	}
 	return connection, nil
 }
 

@@ -1,5 +1,12 @@
 package cics
 
+/*
+#include <ctgclient_eci.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+*/
 import "C"
 import (
 	"context"
@@ -13,7 +20,7 @@ var p *pool.ObjectPool
 var ctx = context.Background()
 
 func InitConnectionPool(config *ConnectionConfig) {
-	tokenChannel := make(chan *C.CTG_ConnToken_t)
+	tokenChannel := make(chan *C.CTG_ConnToken_t, 5)
 
 	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config, TokenChannel: tokenChannel}, &pool.ObjectPoolConfig{
 		LIFO:                     true,

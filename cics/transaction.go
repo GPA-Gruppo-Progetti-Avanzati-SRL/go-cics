@@ -96,7 +96,8 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
 		conntoken := cr.Connection.ConnectionToken
-		defer func() {
+		go func() {
+			log.Trace().Msg("chiudo connessione non valida")
 			closeGatewayConnection(conntoken)
 			C.free(unsafe.Pointer(conntoken))
 		}()

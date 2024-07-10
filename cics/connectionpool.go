@@ -2,8 +2,11 @@ package cics
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"github.com/rs/zerolog/log"
+	"os"
 	"sync"
 	"time"
 )
@@ -40,10 +43,27 @@ func InitConnectionPool(config *ConnectionConfig) {
 
 	connFactory := &ConnectionFactory{Config: config}
 	if config.UseProxy {
+
+		log.Info().Msgf("Reading %v as certificate, %v as key and %v as root certificate", config.SSLClientCertificate, config.SSLClientKey, config.SSLRootCaCertificate)
+		cert, err := tls.LoadX509KeyPair(config.SSLClientCertificate, config.SSLClientKey)
+		caCert, err := os.ReadFile(config.SSLRootCaCertificate)
+		if err != nil {
+			log.Fatal().Err(err).Msgf("failed to load cert: %s", err.Error())
+		}
+
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: config.InsecureSkipVerify,
+			Certificates:       []tls.Certificate{cert}, // this certificate is used to sign the handshake
+			RootCAs:            caCertPool,              // this is used to validate the server certificate
+		}
 		if config.ProxyPort == 0 {
 			log.Debug().Msg("ProxyPort no setted setting default 18080")
 			config.ProxyPort = 18080
 		}
+		connFactory.TlsClientConfig = tlsConfig
 		proxyPortStart := config.ProxyPort
 		proxyPortEnd := proxyPortStart + config.MaxTotal
 		connFactory.PortPool = NewPortPool(proxyPortStart, proxyPortEnd)

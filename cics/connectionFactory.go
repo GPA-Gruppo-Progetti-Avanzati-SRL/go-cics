@@ -12,12 +12,10 @@ import "C"
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"github.com/rs/zerolog/log"
 	"net"
-	"os"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -32,8 +30,9 @@ type Connection struct {
 }
 
 type ConnectionFactory struct {
-	Config   *ConnectionConfig
-	PortPool *PortPool
+	Config          *ConnectionConfig
+	PortPool        *PortPool
+	TlsClientConfig *tls.Config
 }
 
 func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject, error) {
@@ -155,24 +154,10 @@ func (f *ConnectionFactory) closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnTo
 
 func (f *ConnectionFactory) Encrypt(aPort int, ready chan bool, errCh chan<- error, tunnel chan struct{}) {
 	localAddr := "127.0.0.1:" + strconv.Itoa(aPort)
-	log.Info().Msgf("Listening: %v\nProxying & Encrypting: %v\n\n", localAddr, f.Config.Hostname+":"+strconv.Itoa(f.Config.Port))
-	log.Info().Msgf("Reading %v as certificate, %v as key and %v as root certificate", f.Config.SSLClientCertificate, f.Config.SSLClientKey, f.Config.SSLRootCaCertificate)
-	cert, err := tls.LoadX509KeyPair(f.Config.SSLClientCertificate, f.Config.SSLClientKey)
-	caCert, err := os.ReadFile(f.Config.SSLRootCaCertificate)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("failed to load cert: %s", err.Error())
-	}
-
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: f.Config.InsecureSkipVerify,
-		Certificates:       []tls.Certificate{cert}, // this certificate is used to sign the handshake
-		RootCAs:            caCertPool,              // this is used to validate the server certificate
-	}
+	log.Info().Msgf("Listening: %v - Proxying & Encrypting: %v", localAddr, f.Config.Hostname+":"+strconv.Itoa(f.Config.Port))
 	listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
+		log.Error().Msgf("Failed to listen:  %v - %v", localAddr, err)
 		errCh <- err
 		close(ready)
 		return
@@ -184,13 +169,12 @@ func (f *ConnectionFactory) Encrypt(aPort int, ready chan bool, errCh chan<- err
 	var ops uint64
 	for {
 		conn, err := listener.Accept()
-
 		if err != nil {
 			log.Error().Err(err).Msgf("error accepting connection %s", err.Error())
 			continue
 		}
 
-		go f.startListener(ops, tlsConfig, conn, errCh, ready, tunnel)
+		go f.startListener(ops, f.TlsClientConfig, conn, errCh, ready, tunnel)
 
 	}
 }

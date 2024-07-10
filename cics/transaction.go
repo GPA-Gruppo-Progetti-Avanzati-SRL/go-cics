@@ -74,7 +74,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 		return &TransactionError{ErrorCode: "99999",
 			ErrorMessage: "No Cics connection Present"}
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.ConnectionToken.Timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout)*time.Second)
 	defer cancel()
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
 	var ctgRc C.int

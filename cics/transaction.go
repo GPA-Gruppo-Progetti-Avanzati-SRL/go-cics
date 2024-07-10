@@ -79,6 +79,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
 	var ctgRc C.int
 	processDone := make(chan bool)
+	log.Debug().Msgf("Execute Channel Transaction with timeout %d", cr.Connection.Config.Timeout)
 	go func(ctgRc C.int) {
 		ctgRc = C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
 		processDone <- true
@@ -86,8 +87,9 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	select {
 	case <-ctx.Done():
 		ctgRc = C.ECI_ERR_SYSTEM_ERROR
-	case <-processDone:
 		log.Warn().Msg("Timed Out")
+	case <-processDone:
+
 	}
 
 	if ctgRc != C.ECI_NO_ERROR {

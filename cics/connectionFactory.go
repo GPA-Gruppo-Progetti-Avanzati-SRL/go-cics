@@ -13,7 +13,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"github.com/rs/zerolog/log"
 	"net"
@@ -100,8 +99,7 @@ func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) error {
 		log.Info().Msg("Connessione CICS Avvenuta con successo")
 		return nil
 	} else {
-		displayRc(ctgrg)
-		return errors.New("Errore connessione CTG")
+		return displayRc(ctgrg)
 	}
 
 }

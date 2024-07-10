@@ -176,9 +176,9 @@ func (cr *Routine) getEciParams(token C.ECI_ChannelToken_t) C.CTG_ECI_PARMS {
 	eciParms.eci_version = C.ECI_VERSION_2A /* ECI version 2A          */
 	eciParms.eci_call_type = C.ECI_SYNC     /* Synchronous ECI call    */
 
-	eciParms.eci_extend_mode = C.ECI_NO_EXTEND /* Non-extended call       */
-	eciParms.eci_luw_token = C.ECI_LUW_NEW     /* Zero for a new LUW      */
-	eciParms.eci_timeout = 0                   /* Timeout in seconds      */
+	eciParms.eci_extend_mode = C.ECI_NO_EXTEND          /* Non-extended call       */
+	eciParms.eci_luw_token = C.ECI_LUW_NEW              /* Zero for a new LUW      */
+	eciParms.eci_timeout = cr.Connection.Config.Timeout /* Timeout in seconds      */
 
 	programNameChar := [8]C.char{}
 	serverNameChar := [8]C.char{}
@@ -186,7 +186,6 @@ func (cr *Routine) getEciParams(token C.ECI_ChannelToken_t) C.CTG_ECI_PARMS {
 	strCopy8(&serverNameChar, serverName)
 	eciParms.eci_program_name = programNameChar
 	eciParms.eci_system_name = serverNameChar
-
 	transIdChar := [4]C.char{}
 	tpnChar := [4]C.char{}
 	strCopy4(&transIdChar, transId)

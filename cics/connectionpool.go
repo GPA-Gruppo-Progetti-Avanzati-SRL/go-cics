@@ -48,6 +48,7 @@ func CloseConnectionPool() {
 func GetConnection() (*Connection, error) {
 	cicsConnection, err := p.BorrowObject(ctx)
 	if err != nil {
+		log.Error().Msgf("Error getting connection from pool: %v", err)
 		return nil, err
 	}
 
@@ -55,7 +56,7 @@ func GetConnection() (*Connection, error) {
 	if connection.ConnectionToken == nil {
 		log.Debug().Msg("ConnectionToken is nil invalidate")
 		p.InvalidateObject(ctx, cicsConnection)
-		GetConnection()
+		return GetConnection()
 	}
 	return connection, nil
 }

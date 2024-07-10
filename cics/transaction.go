@@ -68,6 +68,11 @@ func (cr *Routine) Transact() *TransactionError {
 		cr.setAuth(&eciParms, pUserName, pPassword)
 	}
 
+	if cr.Connection.ConnectionToken == nil {
+		return &TransactionError{ErrorCode: "99999",
+			ErrorMessage: "No Cics connection Present "}
+	}
+
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
 
 	ctgRc := C.CTG_ECI_Execute_Channel(ctoken, &eciParms)

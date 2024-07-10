@@ -27,6 +27,8 @@ func InitConnectionPool(config *ConnectionConfig) {
 		MaxTotal:                 config.MaxTotal,
 		MaxIdle:                  config.MaxIdle,
 		MinIdle:                  config.MinIdle,
+		TestOnBorrow:             true,
+		TestOnReturn:             true,
 		BlockWhenExhausted:       true,
 		MinEvictableIdleTime:     time.Duration(config.MaxIdleLifeTime) * time.Second,
 		SoftMinEvictableIdleTime: 0,
@@ -56,8 +58,13 @@ func ListeningClosure(tokenChannel chan *C.CTG_ConnToken_t) {
 	for {
 		val := <-tokenChannel
 		log.Info().Msg("Ricevuto Token Procedo chiusura")
-		closeGatewayConnection(val)
-		log.Info().Msg("Effettuata chiusura")
+		ctgRc := C.CTG_closeGatewayConnection(tokenChannel)
+		if ctgRc != C.CTG_OK {
+			log.Info().Msg("Failed to close connection to CICS Transaction Gateway")
+
+		} else {
+			log.Info().Msg("Closed connection to CICS Transaction Gateway")
+		}
 		C.free(unsafe.Pointer(val))
 	}
 }
@@ -72,10 +79,12 @@ func ChannelClosure(channel chan *C.ECI_ChannelToken_t) {
 			log.Error().Err(err).Msgf("ECI_deleteChannel call failed : %v", err)
 		}
 		log.Info().Msg("Canale Eliminato")
+		C.free(unsafe.Pointer(val))
 	}
 }
 
 func CloseConnectionPool() {
+	log.Info().Msg("Closing connection pool")
 	p.Close(ctx)
 }
 

@@ -56,13 +56,13 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 }
 
 func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.PooledObject) error {
-
+	log.Trace().Msg("Destroy object")
 	o := object.Object.(*Connection)
 	if o.ConnectionToken != nil {
+		log.Trace().Msg("Destroy Connection Token")
 		o.TokenChannel <- o.ConnectionToken
 
 	}
-
 	return nil
 }
 
@@ -70,6 +70,7 @@ func (f *ConnectionFactory) ValidateObject(ctx context.Context, object *pool.Poo
 	log.Trace().Msg("ValidateObject")
 	o := object.Object.(*Connection)
 	if o.ConnectionToken == nil {
+		log.Trace().Msg("Not Valid")
 		return false
 	}
 	return true
@@ -101,20 +102,6 @@ func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) error {
 	} else {
 		displayRc(ctgrg)
 		return errors.New("Errore connessione CTG")
-	}
-
-}
-
-func closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnToken_t) {
-	log.Info().Msg("Chiudo Connessione")
-	/* Close connection to CICS TG */
-	ctgRc := C.CTG_closeGatewayConnection(gatewayTokenPtr)
-
-	if ctgRc != C.CTG_OK {
-		log.Info().Msg("Failed to close connection to CICS Transaction Gateway")
-
-	} else {
-		log.Info().Msg("Closed connection to CICS Transaction Gateway")
 	}
 
 }

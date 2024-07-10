@@ -92,7 +92,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	case <-processDone:
 		break
 	}
-	log.Trace().Msg("Analizzo RC")
+
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
 		conntoken := cr.Connection.ConnectionToken
@@ -101,6 +101,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 			C.free(unsafe.Pointer(conntoken))
 		}()
 		cr.Connection.ConnectionToken = nil
+		log.Trace().Msg("Visualizzo errore")
 		return displayRc(ctgRc)
 	}
 

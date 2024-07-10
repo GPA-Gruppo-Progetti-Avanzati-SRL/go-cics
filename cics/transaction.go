@@ -73,9 +73,10 @@ func (cr *Routine) Transact() *TransactionError {
 	ctgRc := C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
 
 	if ctgRc != C.ECI_NO_ERROR {
+		token = cr.Connection.ConnectionToken
+		closeGatewayConnection(token)
+		defer C.free(unsafe.Pointer(token))
 		cr.Connection.ConnectionToken = nil
-		closeGatewayConnection(ctoken)
-		defer C.free(unsafe.Pointer(ctoken))
 		return displayRc(ctgRc)
 	}
 	err := cr.getOutputContainer(token)

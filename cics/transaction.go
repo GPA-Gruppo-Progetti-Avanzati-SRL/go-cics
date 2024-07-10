@@ -9,7 +9,9 @@ package cics
 import "C"
 
 import (
+	"context"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/rs/zerolog/log"
@@ -45,7 +47,7 @@ func (cr *Routine) TransactV3() *TransactionError {
 	return nil
 }
 
-func (cr *Routine) Transact() *TransactionError {
+func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 
 	var token C.ECI_ChannelToken_t
 
@@ -70,12 +72,23 @@ func (cr *Routine) Transact() *TransactionError {
 
 	if cr.Connection.ConnectionToken == nil {
 		return &TransactionError{ErrorCode: "99999",
-			ErrorMessage: "No Cics connection Present "}
+			ErrorMessage: "No Cics connection Present"}
 	}
-
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.ConnectionToken.Timeout)*time.Second)
+	defer cancel()
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
-
-	ctgRc := C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
+	ctgRc := C.ECI_NO_ERROR
+	processDone := make(chan bool)
+	go func() {
+		ctgRc = C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
+		processDone <- true
+	}()
+	select {
+	case <-ctx.Done():
+		ctgRc = C.ECI_ERR_SYSTEM_ERROR
+	case <-processDone:
+		log.Warn().Msg("Timed Out")
+	}
 
 	if ctgRc != C.ECI_NO_ERROR {
 		conntoken := cr.Connection.ConnectionToken
@@ -84,6 +97,7 @@ func (cr *Routine) Transact() *TransactionError {
 		cr.Connection.ConnectionToken = nil
 		return displayRc(ctgRc)
 	}
+
 	err := cr.getOutputContainer(token)
 	return err
 }

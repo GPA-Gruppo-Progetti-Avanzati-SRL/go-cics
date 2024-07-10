@@ -85,7 +85,7 @@ func InitConnectionPool(config *ConnectionConfig, reg *prometheus.Registry) erro
 
 	go ListeningClosure(tokenChannel)
 	go ChannelClosure(eciChannel)
-
+	return nil
 }
 
 func ListeningClosure(tokenChannel chan *C.CTG_ConnToken_t) {

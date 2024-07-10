@@ -58,7 +58,9 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	defer C.free(unsafe.Pointer(pChannel))
 
 	C.ECI_createChannel(pChannel, &token)
-	defer deleteChannel(&token)
+	defer func() {
+		cr.Connection.EciChannel <- &token
+	}()
 
 	errinput := cr.buildContainer(token)
 	if errinput != nil {
@@ -99,9 +101,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
 		conntoken := cr.Connection.ConnectionToken
-		log.Trace().Msg("chiudo connessione non valida")
 		cr.Connection.TokenChannel <- conntoken
-		log.Trace().Msg("chiusa connessione non valida")
 		cr.Connection.ConnectionToken = nil
 		return displayRc(ctgRc)
 	}

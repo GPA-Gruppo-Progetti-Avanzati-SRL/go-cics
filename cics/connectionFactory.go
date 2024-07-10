@@ -28,6 +28,7 @@ type Connection struct {
 	ConnectionToken *C.CTG_ConnToken_t
 	Config          *ConnectionConfig
 	TokenChannel    chan *C.CTG_ConnToken_t
+	EciChannel      chan *C.CTG_Eci_Channel_t
 }
 
 type ConnectionFactory struct {
@@ -42,13 +43,30 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 	if err != nil {
 		return nil, err
 	}
+	eciChannel := make(chan *C.CTG_Eci_Channel_t)
+	go ChannelClosure(eciChannel)
 	return pool.NewPooledObject(
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
 				Config:          f.Config,
 				TokenChannel:    f.TokenChannel,
+				EciChannel:      eciChannel,
 			}),
 		nil
+}
+
+func ChannelClosure(channel chan *C.CTG_Eci_Channel_t) {
+	for {
+		val := <-channel
+
+		log.Trace().Msg("Cancello Canale")
+		ctgRc := C.ECI_deleteChannel(val)
+
+		if ctgRc != C.ECI_NO_ERROR {
+			log.Error().Msg("ECI_deleteChannel call failed.")
+		}
+		log.Trace().Msg("Cancellato Canale")
+	}
 }
 
 func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.PooledObject) error {

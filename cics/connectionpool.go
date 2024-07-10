@@ -47,16 +47,18 @@ func InitConnectionPool(config *ConnectionConfig) {
 		log.Info().Msg("Socket opened")
 	}
 
-	go func() {
-		for {
-			log.Info().Msg("Ricevuto Token Procedo chiusura")
-			val := <-tokenChannel
-			closeGatewayConnection(val)
-			C.free(unsafe.Pointer(val))
-		}
+	go ListeningClosure(tokenChannel)
 
-	}()
+}
 
+func ListeningClosure(tokenChannel chan *C.CTG_ConnToken_t) {
+	for {
+		val := <-tokenChannel
+		log.Info().Msg("Ricevuto Token Procedo chiusura")
+		closeGatewayConnection(val)
+		log.Info().Msg("Effettuata chiusura")
+		C.free(unsafe.Pointer(val))
+	}
 }
 
 func CloseConnectionPool() {

@@ -63,7 +63,7 @@ func BuildHeaderV2(RequestInfo *RequestInfo, config *RoutineConfig) *HeaderV2 {
 		LogLevel:           log_level,
 		ErrorDescription:   "",
 		RequestIdClient:    RequestInfo.RequestId,
-		CorellationIdPoste: RequestInfo.TrackId,
+		CorrelationIdPoste: RequestInfo.TrackId,
 		RequestIdLegacy:    RequestInfo.RequestId,
 		TransId:            config.TransId,
 	}

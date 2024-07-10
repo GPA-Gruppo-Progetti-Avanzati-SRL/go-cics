@@ -58,7 +58,7 @@ func ListeningClosure(tokenChannel chan *C.CTG_ConnToken_t) {
 	for {
 		val := <-tokenChannel
 		log.Info().Msg("Ricevuto Token Procedo chiusura")
-		ctgRc := C.CTG_closeGatewayConnection(tokenChannel)
+		ctgRc := C.CTG_closeGatewayConnection(val)
 		if ctgRc != C.CTG_OK {
 			log.Info().Msg("Failed to close connection to CICS Transaction Gateway")
 

@@ -49,10 +49,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	return m
 }
 
-func InitConnectionPool(config *ConnectionConfig) {
+func InitConnectionPool(config *ConnectionConfig, reg *prometheus.Registry) error {
 	tokenChannel := make(chan *C.CTG_ConnToken_t, 5)
 	eciChannel := make(chan *C.ECI_ChannelToken_t)
-	reg := prometheus.NewRegistry()
+
 	metrics = NewMetrics(reg)
 	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config, TokenChannel: tokenChannel, EciChannel: eciChannel}, &pool.ObjectPoolConfig{
 		LIFO:                     true,

@@ -43,7 +43,7 @@ func Marshal(v interface{}) ([]byte, error) {
 	t := value.Type()
 
 	builder := BufferWritePosition{}
-	maxLenght := 0
+	maxLength := 0
 	lastByte := 0
 	if value.Kind() == reflect.Struct {
 
@@ -60,7 +60,7 @@ func Marshal(v interface{}) ([]byte, error) {
 				return nil, err
 			}
 
-			maxLenght += mainframeTag.length
+			maxLength += mainframeTag.length
 			currentLastByte := mainframeTag.start + mainframeTag.length
 			if lastByte < (currentLastByte) {
 				lastByte = currentLastByte

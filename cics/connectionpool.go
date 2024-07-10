@@ -4,15 +4,52 @@ import (
 	"context"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"github.com/rs/zerolog/log"
+	"sync"
 	"time"
 )
 
 var p *pool.ObjectPool
 var ctx = context.Background()
 
+type PortPool struct {
+	ports chan int
+	mu    sync.Mutex
+}
+
+func NewPortPool(start, end int) *PortPool {
+	pool := &PortPool{
+		ports: make(chan int, end-start+1),
+	}
+	for i := start; i <= end; i++ {
+		pool.ports <- i
+	}
+	return pool
+}
+
+// Funzione per richiedere una porta
+func (p *PortPool) GetPort() int {
+	return <-p.ports
+}
+
+// Funzione per liberare una porta
+func (p *PortPool) ReleasePort(port int) {
+	p.ports <- port
+}
+
 func InitConnectionPool(config *ConnectionConfig) {
 
-	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config}, &pool.ObjectPoolConfig{
+	connFactory := &ConnectionFactory{Config: config}
+	if config.UseProxy {
+		if config.ProxyPort == 0 {
+			log.Debug().Msg("ProxyPort no setted setting default 18080")
+			config.ProxyPort = 18080
+		}
+		proxyPortStart := config.ProxyPort
+		proxyPortEnd := proxyPortStart + config.MaxTotal
+		connFactory.PortPool = NewPortPool(proxyPortStart, proxyPortEnd)
+	}
+
+	p = pool.NewObjectPool(ctx, connFactory, &pool.ObjectPoolConfig{
 		LIFO:                     true,
 		MaxTotal:                 config.MaxTotal,
 		MaxIdle:                  config.MaxIdle,
@@ -25,25 +62,6 @@ func InitConnectionPool(config *ConnectionConfig) {
 		TimeBetweenEvictionRuns:  time.Duration(config.MaxIdleLifeTime/2) * time.Second,
 		EvictionContext:          nil,
 	})
-	if config.UseProxy {
-		proxyready := make(chan bool)
-		if config.ProxyPort == 0 {
-			log.Debug().Msg("ProxyPort no setted setting default 18080")
-			config.ProxyPort = 18080
-		}
-		errCh := make(chan error, 3)
-		go Encrypt(config, proxyready, errCh)
-		log.Info().Msg("Wait opening socket")
-		<-proxyready
-		log.Info().Msg("Socket opened")
-
-		for err := range errCh {
-			if err != nil {
-				log.Error().Msgf("Routine %s", err)
-			}
-		}
-
-	}
 
 }
 

@@ -11,7 +11,7 @@ type HeaderV2 struct {
 	CicsAbendCode      string `mainframe:"start=23,length=4"`
 	ErrorDescription   string `mainframe:"start=27,length=30"`
 	RequestIdClient    string `mainframe:"start=57,length=255"`
-	CorellationIdPoste string `mainframe:"start=312,length=100"`
+	CorrelationIdPoste string `mainframe:"start=312,length=100"`
 	RequestIdLegacy    string `mainframe:"start=412,length=100"`
 	TransId            string `mainframe:"start=512,length=4"`
 }

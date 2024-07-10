@@ -11,7 +11,6 @@ import "C"
 import (
 	"context"
 	"fmt"
-	"time"
 	"unsafe"
 
 	"github.com/rs/zerolog/log"
@@ -74,10 +73,10 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 		return &TransactionError{ErrorCode: "99999",
 			ErrorMessage: "No Cics connection Present"}
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)
-	defer cancel()
+	//ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)
+	//defer cancel()
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
-	var ctgRc C.int
+	/*var ctgRc C.int
 	processDone := make(chan bool)
 	log.Debug().Msgf("Execute Channel Transaction with timeout %d", cr.Connection.Config.Timeout+1)
 	go func(ctgRc C.int) {
@@ -92,13 +91,15 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	case <-processDone:
 		break
 	}
-
+	*/
+	ctgRc := C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
 		conntoken := cr.Connection.ConnectionToken
 		go func() {
 			log.Trace().Msg("chiudo connessione non valida")
 			closeGatewayConnection(conntoken)
+			log.Trace().Msg("chiusa connessione non valida")
 			C.free(unsafe.Pointer(conntoken))
 		}()
 		cr.Connection.ConnectionToken = nil

@@ -66,7 +66,6 @@ func InitConnectionPool(config *ConnectionConfig) {
 }
 
 func CloseConnectionPool() {
-
 	p.Close(ctx)
 }
 

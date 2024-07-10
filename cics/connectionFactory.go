@@ -90,7 +90,7 @@ func (f *ConnectionFactory) PassivateObject(ctx context.Context, object *pool.Po
 	return nil
 }
 
-func (f *ConnectionFactory) getCicsServerUsingProxy(aPort int, ptr *C.CTG_ConnToken_tk, tunnel chan struct{}) error {
+func (f *ConnectionFactory) getCicsServerUsingProxy(aPort int, ptr *C.CTG_ConnToken_t, tunnel chan struct{}) error {
 
 	hostname := C.CString("127.0.0.1")
 	port := C.int(aPort)
@@ -119,7 +119,7 @@ func (f *ConnectionFactory) getCicsServerUsingProxy(aPort int, ptr *C.CTG_ConnTo
 
 }
 
-func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_tk) error {
+func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) error {
 	var hostname *C.char
 	var port C.int
 

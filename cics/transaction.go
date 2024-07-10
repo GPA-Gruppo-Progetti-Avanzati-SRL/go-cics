@@ -34,9 +34,9 @@ func (cr *Routine) TransactParsed() *TransactionError {
 	return nil
 }
 
-func (cr *Routine) TransactV3() *TransactionError {
+func (cr *Routine) TransactV3(ctx context.Context) *TransactionError {
 
-	err := cr.Transact()
+	err := cr.Transact(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,12 +77,12 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.ConnectionToken.Timeout)*time.Second)
 	defer cancel()
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
-	ctgRc := C.ECI_NO_ERROR
+	var ctgRc C.int
 	processDone := make(chan bool)
-	go func() {
+	go func(ctgRc C.int) {
 		ctgRc = C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
 		processDone <- true
-	}()
+	}(ctgRc)
 	select {
 	case <-ctx.Done():
 		ctgRc = C.ECI_ERR_SYSTEM_ERROR

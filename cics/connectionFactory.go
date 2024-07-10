@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -154,7 +155,7 @@ func (f *ConnectionFactory) closeGatewayConnection(gatewayTokenPtr *C.CTG_ConnTo
 
 func (f *ConnectionFactory) Encrypt(aPort int, ready chan bool, errCh chan<- error, tunnel chan struct{}) {
 	localAddr := "127.0.0.1:" + strconv.Itoa(aPort)
-	log.Info().Msgf("Listening: %v\nProxying & Encrypting: %v\n\n", localAddr, f.Config.Hostname+":"+strconv.Itoa(aPort))
+	log.Info().Msgf("Listening: %v\nProxying & Encrypting: %v\n\n", localAddr, f.Config.Hostname+":"+strconv.Itoa(f.Config.Port))
 	log.Info().Msgf("Reading %v as certificate, %v as key and %v as root certificate", f.Config.SSLClientCertificate, f.Config.SSLClientKey, f.Config.SSLRootCaCertificate)
 	cert, err := tls.LoadX509KeyPair(f.Config.SSLClientCertificate, f.Config.SSLClientKey)
 	caCert, err := os.ReadFile(f.Config.SSLRootCaCertificate)
@@ -173,7 +174,7 @@ func (f *ConnectionFactory) Encrypt(aPort int, ready chan bool, errCh chan<- err
 	listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
 		errCh <- err
-		ready <- false
+		close(ready)
 		return
 	}
 	defer func() {
@@ -183,34 +184,37 @@ func (f *ConnectionFactory) Encrypt(aPort int, ready chan bool, errCh chan<- err
 	var ops uint64
 	for {
 		conn, err := listener.Accept()
+
 		if err != nil {
 			log.Error().Err(err).Msgf("error accepting connection %s", err.Error())
 			continue
 		}
+
 		go f.startListener(ops, tlsConfig, conn, errCh, ready, tunnel)
 
 	}
 }
 
 func (f *ConnectionFactory) startListener(ops uint64, tlsConfig *tls.Config, conn net.Conn, errCh chan<- error, ready chan bool, tunnel chan struct{}) {
-
-	i := atomic.AddUint64(&ops, 1)
-	conn2, err := tls.Dial("tcp", f.Config.Hostname+":"+strconv.Itoa(f.Config.Port), tlsConfig)
 	defer conn.Close()
-	defer conn2.Close()
+	i := atomic.AddUint64(&ops, 1)
+	log.Debug().Msgf("Connecting TLS to %s ", f.Config.Hostname+":"+strconv.Itoa(f.Config.Port))
+	conn2, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", f.Config.Hostname+":"+strconv.Itoa(f.Config.Port), tlsConfig)
 
 	if err != nil {
 		log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
 		errCh <- err
-		ready <- false
+		close(ready)
 		return
 	}
+
+	defer conn2.Close()
 
 	err = conn2.Handshake()
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to complete handshake: %s\n", err.Error())
 		errCh <- err
-		ready <- false
+		close(ready)
 		return
 	}
 	log.Info().Msgf("%d connect [%s -> %s]", i, conn2.LocalAddr(), conn2.RemoteAddr())

@@ -29,6 +29,7 @@ const HEADER = "HEADER"
 const INPUT = "INPUT"
 const ERRORE = "ERRORE"
 const OUTPUT = "OUTPUT"
+const CICSLIBERRORCODE = "99999"
 
 func (cr *Routine) TransactParsed() *TransactionError {
 	return nil
@@ -76,7 +77,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	}
 
 	if cr.Connection.ConnectionToken == nil {
-		return &TransactionError{ErrorCode: "99999",
+		return &TransactionError{ErrorCode: CICSLIBERRORCODE,
 			ErrorMessage: "No Cics connection Present"}
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)
@@ -147,21 +148,27 @@ func (cr *Routine) checkOutputContainer() *TransactionError {
 
 	if cr.OutputContainer == nil {
 		return &TransactionError{
-			ErrorCode:    "99999",
+			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container present",
 		}
 	}
 	if len(cr.OutputContainer[HEADER]) == 0 {
 		return &TransactionError{
-			ErrorCode:    "99999",
+			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container header present",
 		}
 	}
 
 	header := &HeaderV3{}
-	Unmarshal(cr.OutputContainer[HEADER], header)
+	err := Unmarshal(cr.OutputContainer[HEADER], header)
+	if err != nil {
+		return &TransactionError{
+			ErrorCode:    CICSLIBERRORCODE,
+			ErrorMessage: "Unable to unmarshal header",
+		}
+	}
 
-	fmt.Printf("Return Header : %v\n", header)
+	log.Trace().Msgf("Return Header : %v\n", header)
 
 	if header.ReturnCode == "000" || header.ReturnCode == "00000" {
 		return nil
@@ -183,7 +190,7 @@ func (cr *Routine) buildContainer(token C.ECI_ChannelToken_t) *TransactionError 
 		C.free(unsafe.Pointer(pKey))
 		if ctgRc != C.ECI_NO_ERROR {
 			return &TransactionError{
-				ErrorCode:    "99999",
+				ErrorCode:    CICSLIBERRORCODE,
 				ErrorMessage: "Errore set Container Input : " + key,
 			}
 		}

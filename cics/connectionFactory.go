@@ -36,12 +36,14 @@ var EciChannel chan *C.ECI_ChannelToken_t
 
 func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject, error) {
 	log.Trace().Msg("Make connection")
+
 	ptr := C.malloc(C.sizeof_char * 1024)
 	C.memset(ptr, C.int(C.sizeof_char*1024), 0)
 	err := f.getCicsServer((*C.CTG_ConnToken_t)(ptr))
 	if err != nil {
 		return nil, err
 	}
+	metrics.CreateConnection.Inc()
 	return pool.NewPooledObject(
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
@@ -53,6 +55,7 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.PooledObject) error {
 	log.Trace().Msg("Destroy connection")
 	o := object.Object.(*Connection)
+	metrics.DestroyConnection.Inc()
 	if o.ConnectionToken != nil {
 		log.Trace().Msg("Destroy Connection Token")
 		TokenChannel <- o.ConnectionToken

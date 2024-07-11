@@ -24,6 +24,8 @@ type Metrics struct {
 	GetConnection      prometheus.Counter
 	ReturnedConnection prometheus.Counter
 	ActiveConnection   prometheus.Gauge
+	CreateConnection   prometheus.Counter
+	DestroyConnection  prometheus.Counter
 }
 
 var metrics *Metrics
@@ -31,21 +33,27 @@ var metrics *Metrics
 func NewMetrics(reg prometheus.Registerer) *Metrics {
 	m := &Metrics{
 		GetConnection: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "get_connection_count",
+			Name: "cics_get_connection_count",
 			Help: "Number of get connections requested.",
 		}),
 		ReturnedConnection: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "returned_connection_count",
+			Name: "cics_returned_connection_count",
 			Help: "Number of get connections returned to the pool.",
 		}),
-		ActiveConnection: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "active_connection_count",
-			Help: "Number of active connections.",
+		CreateConnection: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "cics_create_connection_count",
+			Help: "Number of connections created",
+		}),
+		DestroyConnection: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "cics_destroy_connection_count",
+			Help: "Number of  connections destroyed ",
 		}),
 	}
 	reg.MustRegister(m.GetConnection)
 	reg.MustRegister(m.ReturnedConnection)
 	reg.MustRegister(m.ActiveConnection)
+	reg.MustRegister(m.CreateConnection)
+	reg.MustRegister(m.DestroyConnection)
 	return m
 }
 

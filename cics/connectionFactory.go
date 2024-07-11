@@ -25,15 +25,14 @@ import (
 type Connection struct {
 	ConnectionToken *C.CTG_ConnToken_t
 	Config          *ConnectionConfig
-	TokenChannel    chan *C.CTG_ConnToken_t
-	EciChannel      chan *C.ECI_ChannelToken_t
 }
 
 type ConnectionFactory struct {
-	Config       *ConnectionConfig
-	TokenChannel chan *C.CTG_ConnToken_t
-	EciChannel   chan *C.ECI_ChannelToken_t
+	Config *ConnectionConfig
 }
+
+var TokenChannel chan *C.CTG_ConnToken_t
+var EciChannel chan *C.ECI_ChannelToken_t
 
 func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject, error) {
 	ptr := C.malloc(C.sizeof_char * 1024)
@@ -47,8 +46,6 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
 				Config:          f.Config,
-				TokenChannel:    f.TokenChannel,
-				EciChannel:      f.EciChannel,
 			}),
 		nil
 }
@@ -58,7 +55,7 @@ func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.Pool
 	o := object.Object.(*Connection)
 	if o.ConnectionToken != nil {
 		log.Trace().Msg("Destroy Connection Token")
-		o.TokenChannel <- o.ConnectionToken
+		TokenChannel <- o.ConnectionToken
 
 	}
 	return nil

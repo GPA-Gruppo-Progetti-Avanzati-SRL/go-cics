@@ -59,7 +59,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 
 	C.ECI_createChannel(pChannel, &token)
 	defer func() {
-		cr.Connection.EciChannel <- &token
+		EciChannel <- &token
 	}()
 
 	errinput := cr.buildContainer(token)
@@ -101,7 +101,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
 		conntoken := cr.Connection.ConnectionToken
-		cr.Connection.TokenChannel <- conntoken
+		TokenChannel <- conntoken
 		cr.Connection.ConnectionToken = nil
 		return displayRc(ctgRc)
 	}

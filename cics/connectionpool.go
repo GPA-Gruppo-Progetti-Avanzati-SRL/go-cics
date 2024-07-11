@@ -49,10 +49,28 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	return m
 }
 
+type CicsEvictionPolicy struct {
+}
+
+// Evict do evict by config
+func (p *CicsEvictionPolicy) Evict(config *pool.EvictionConfig, underTest *pool.PooledObject, idleCount int) bool {
+	idleTime := underTest.GetIdleTime()
+	log.Trace().Msgf("Test Evict Config idle soft evict time : %d - idleTime : %d - idleCount : %d   - config.Minidle : %d - config.IdleEvictTime : %d  ",,config.IdleSoftEvictTime,idleTime,idleCount,config.MinIdle,config.IdleEvictTime )
+
+	if (config.IdleSoftEvictTime < idleTime &&
+		config.MinIdle < idleCount) ||
+		config.IdleEvictTime < idleTime {
+		log.Trace().Msg("Test Evict True")
+		return true
+	}
+	log.Trace().Msg("Test Evict False")
+	return false
+}
+
 func InitConnectionPool(config *ConnectionConfig, reg *prometheus.Registerer) error {
 	TokenChannel = make(chan *C.CTG_ConnToken_t, config.MaxTotal)
 	EciChannel = make(chan *C.ECI_ChannelToken_t)
-
+	pool.RegistryEvictionPolicy("CicsEvictionPolicy", &CicsEvictionPolicy{})
 	metrics = NewMetrics(*reg)
 	p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config}, &pool.ObjectPoolConfig{
 		LIFO:                     true,
@@ -63,9 +81,10 @@ func InitConnectionPool(config *ConnectionConfig, reg *prometheus.Registerer) er
 		TestOnReturn:             true,
 		BlockWhenExhausted:       true,
 		MinEvictableIdleTime:     time.Duration(config.MaxIdleLifeTime) * time.Second,
-		SoftMinEvictableIdleTime: 0,
-		NumTestsPerEvictionRun:   0,
-		EvictionPolicyName:       "",
+		SoftMinEvictableIdleTime: 1,
+		NumTestsPerEvictionRun:   1,
+		EvictionPolicyName:       "CicsEvictionPolicy",
+		TestWhileIdle:            true,
 		TimeBetweenEvictionRuns:  time.Duration(config.MaxIdleLifeTime/2) * time.Second,
 		EvictionContext:          nil,
 	})
@@ -118,9 +137,9 @@ func ChannelClosure() {
 
 func CloseConnectionPool() {
 	log.Info().Msg("Closing connection pool")
+	p.Close(ctx)
 	close(EciChannel)
 	close(TokenChannel)
-	p.Close(ctx)
 }
 
 func GetConnection() (*Connection, error) {

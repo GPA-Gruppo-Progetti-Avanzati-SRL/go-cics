@@ -35,13 +35,13 @@ var TokenChannel chan *C.CTG_ConnToken_t
 var EciChannel chan *C.ECI_ChannelToken_t
 
 func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject, error) {
+	log.Trace().Msg("Make connection")
 	ptr := C.malloc(C.sizeof_char * 1024)
 	C.memset(ptr, C.int(C.sizeof_char*1024), 0)
 	err := f.getCicsServer((*C.CTG_ConnToken_t)(ptr))
 	if err != nil {
 		return nil, err
 	}
-
 	return pool.NewPooledObject(
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
@@ -51,7 +51,7 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 }
 
 func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.PooledObject) error {
-	log.Trace().Msg("Destroy object")
+	log.Trace().Msg("Destroy connection")
 	o := object.Object.(*Connection)
 	if o.ConnectionToken != nil {
 		log.Trace().Msg("Destroy Connection Token")
@@ -62,7 +62,7 @@ func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.Pool
 }
 
 func (f *ConnectionFactory) ValidateObject(ctx context.Context, object *pool.PooledObject) bool {
-	log.Trace().Msg("ValidateObject")
+	log.Trace().Msg("Validate Connection")
 	o := object.Object.(*Connection)
 	if o.ConnectionToken == nil {
 		log.Trace().Msg("Not Valid")

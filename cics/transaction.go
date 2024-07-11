@@ -9,7 +9,9 @@ package cics
 import "C"
 
 import (
+	"context"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/rs/zerolog/log"
@@ -27,14 +29,15 @@ const HEADER = "HEADER"
 const INPUT = "INPUT"
 const ERRORE = "ERRORE"
 const OUTPUT = "OUTPUT"
+const CICSLIBERRORCODE = "99999"
 
 func (cr *Routine) TransactParsed() *TransactionError {
 	return nil
 }
 
-func (cr *Routine) TransactV3() *TransactionError {
+func (cr *Routine) TransactV3(ctx context.Context) *TransactionError {
 
-	err := cr.Transact()
+	err := cr.Transact(ctx)
 	if err != nil {
 		return err
 	}
@@ -45,7 +48,10 @@ func (cr *Routine) TransactV3() *TransactionError {
 	return nil
 }
 
-func (cr *Routine) Transact() *TransactionError {
+func (cr *Routine) Transact(ctx context.Context) *TransactionError {
+	for key, element := range cr.InputContainer {
+		log.Trace().Msgf("INPUTCONTAINER %s-%s*EOC*", key, element)
+	}
 
 	var token C.ECI_ChannelToken_t
 
@@ -53,7 +59,9 @@ func (cr *Routine) Transact() *TransactionError {
 	defer C.free(unsafe.Pointer(pChannel))
 
 	C.ECI_createChannel(pChannel, &token)
-	defer deleteChannel(&token)
+	defer func() {
+		EciChannel <- &token
+	}()
 
 	errinput := cr.buildContainer(token)
 	if errinput != nil {
@@ -68,13 +76,37 @@ func (cr *Routine) Transact() *TransactionError {
 		cr.setAuth(&eciParms, pUserName, pPassword)
 	}
 
+	if cr.Connection.ConnectionToken == nil {
+		return &TransactionError{ErrorCode: CICSLIBERRORCODE,
+			ErrorMessage: "No Cics connection Present"}
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)
+	defer cancel()
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
-
-	ctgRc := C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
+	var ctgRc C.int
+	processDone := make(chan bool)
+	log.Debug().Msgf("Execute Channel Transaction with timeout %d", cr.Connection.Config.Timeout+1)
+	go func(ctgRc C.int) {
+		ctgRc = C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
+		processDone <- true
+	}(ctgRc)
+	select {
+	case <-ctx.Done():
+		ctgRc = C.ECI_ERR_SYSTEM_ERROR
+		log.Warn().Msg("Timed Out")
+		break
+	case <-processDone:
+		break
+	}
 
 	if ctgRc != C.ECI_NO_ERROR {
+		log.Trace().Msg("Ho errore")
+		conntoken := cr.Connection.ConnectionToken
+		TokenChannel <- conntoken
+		cr.Connection.ConnectionToken = nil
 		return displayRc(ctgRc)
 	}
+
 	err := cr.getOutputContainer(token)
 	return err
 }
@@ -105,10 +137,10 @@ func (cr *Routine) getOutputContainer(token C.ECI_ChannelToken_t) *TransactionEr
 		}
 
 		cr.OutputContainer[containerName] = containerContentSlice
+		log.Trace().Msgf("OUTPUTCONTAINER , %s-%s*EOC*", containerName, containerContentSlice)
 		C.free(dataBuff)
 		ctgRc = C.ECI_getNextContainer(token, &contInfo)
 	}
-
 	return nil
 }
 
@@ -116,21 +148,27 @@ func (cr *Routine) checkOutputContainer() *TransactionError {
 
 	if cr.OutputContainer == nil {
 		return &TransactionError{
-			ErrorCode:    "99999",
+			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container present",
 		}
 	}
 	if len(cr.OutputContainer[HEADER]) == 0 {
 		return &TransactionError{
-			ErrorCode:    "99999",
+			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container header present",
 		}
 	}
 
 	header := &HeaderV3{}
-	Unmarshal(cr.OutputContainer[HEADER], header)
+	err := Unmarshal(cr.OutputContainer[HEADER], header)
+	if err != nil {
+		return &TransactionError{
+			ErrorCode:    CICSLIBERRORCODE,
+			ErrorMessage: "Unable to unmarshal header",
+		}
+	}
 
-	fmt.Printf("Return Header : %v\n", header)
+	log.Trace().Msgf("Return Header : %v\n", header)
 
 	if header.ReturnCode == "000" || header.ReturnCode == "00000" {
 		return nil
@@ -152,7 +190,7 @@ func (cr *Routine) buildContainer(token C.ECI_ChannelToken_t) *TransactionError 
 		C.free(unsafe.Pointer(pKey))
 		if ctgRc != C.ECI_NO_ERROR {
 			return &TransactionError{
-				ErrorCode:    "99999",
+				ErrorCode:    CICSLIBERRORCODE,
 				ErrorMessage: "Errore set Container Input : " + key,
 			}
 		}
@@ -172,9 +210,9 @@ func (cr *Routine) getEciParams(token C.ECI_ChannelToken_t) C.CTG_ECI_PARMS {
 	eciParms.eci_version = C.ECI_VERSION_2A /* ECI version 2A          */
 	eciParms.eci_call_type = C.ECI_SYNC     /* Synchronous ECI call    */
 
-	eciParms.eci_extend_mode = C.ECI_NO_EXTEND /* Non-extended call       */
-	eciParms.eci_luw_token = C.ECI_LUW_NEW     /* Zero for a new LUW      */
-	eciParms.eci_timeout = 0                   /* Timeout in seconds      */
+	eciParms.eci_extend_mode = C.ECI_NO_EXTEND                   /* Non-extended call       */
+	eciParms.eci_luw_token = C.ECI_LUW_NEW                       /* Zero for a new LUW      */
+	eciParms.eci_timeout = C.short(cr.Connection.Config.Timeout) /* Timeout in seconds      */
 
 	programNameChar := [8]C.char{}
 	serverNameChar := [8]C.char{}
@@ -182,7 +220,6 @@ func (cr *Routine) getEciParams(token C.ECI_ChannelToken_t) C.CTG_ECI_PARMS {
 	strCopy8(&serverNameChar, serverName)
 	eciParms.eci_program_name = programNameChar
 	eciParms.eci_system_name = serverNameChar
-
 	transIdChar := [4]C.char{}
 	tpnChar := [4]C.char{}
 	strCopy4(&transIdChar, transId)
@@ -221,23 +258,13 @@ func strCopy4(dest *[4]C.char, src string) {
 	}
 }
 
-func deleteChannel(channelTokPtr *C.ECI_ChannelToken_t) {
-
-	ctgRc := C.ECI_deleteChannel(channelTokPtr)
-
-	if ctgRc != C.ECI_NO_ERROR {
-		log.Error().Msg("ECI_deleteChannel call failed.")
-	}
-
-}
-
 func displayRc(ctgRc C.int) *TransactionError {
 	ptr := C.malloc(C.sizeof_char * (C.CTG_MAX_RCSTRING + 1))
 	C.memset(ptr, C.sizeof_char*(C.CTG_MAX_RCSTRING+1), 0)
 	C.CTG_getRcString(ctgRc, (*C.char)(ptr))
 	defer C.free(ptr)
 	returnString := C.GoBytes(ptr, C.sizeof_char*(C.CTG_MAX_RCSTRING+1))
-	fmt.Println("ErrorCode", ctgRc, "ErrorMessage", ClearString(string(returnString)))
+	log.Trace().Msgf("ErrorCode : %v ,ErrorMessage %s", ctgRc, ClearString(string(returnString)))
 	return &TransactionError{
 		ErrorCode: fmt.Sprintf("%v", ctgRc), ErrorMessage: ClearString(string(returnString)),
 	}

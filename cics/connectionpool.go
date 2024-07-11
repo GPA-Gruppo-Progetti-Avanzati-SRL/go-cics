@@ -40,11 +40,15 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "cics_returned_connection_count",
 			Help: "Number of get connections returned to the pool.",
 		}),
-		CreateConnection: prometheus.NewGauge(prometheus.GaugeOpts{
+		ActiveConnection: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "cics_active_connection_count",
+			Help: "Number of active connections created",
+		}),
+		CreateConnection: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "cics_create_connection_count",
 			Help: "Number of connections created",
 		}),
-		DestroyConnection: prometheus.NewGauge(prometheus.GaugeOpts{
+		DestroyConnection: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "cics_destroy_connection_count",
 			Help: "Number of  connections destroyed ",
 		}),

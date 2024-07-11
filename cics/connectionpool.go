@@ -55,7 +55,7 @@ type CicsEvictionPolicy struct {
 // Evict do evict by config
 func (p *CicsEvictionPolicy) Evict(config *pool.EvictionConfig, underTest *pool.PooledObject, idleCount int) bool {
 	idleTime := underTest.GetIdleTime()
-	log.Trace().Msgf("Test Evict Config idle soft evict time : %d - idleTime : %d - idleCount : %d   - config.Minidle : %d - config.IdleEvictTime : %d  ",,config.IdleSoftEvictTime,idleTime,idleCount,config.MinIdle,config.IdleEvictTime )
+	log.Trace().Msgf("Test Evict Config idle soft evict time : %d - idleTime : %d - idleCount : %d   - config.Minidle : %d - config.IdleEvictTime : %d  ", config.IdleSoftEvictTime, idleTime, idleCount, config.MinIdle, config.IdleEvictTime)
 
 	if (config.IdleSoftEvictTime < idleTime &&
 		config.MinIdle < idleCount) ||

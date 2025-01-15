@@ -1,57 +1,50 @@
 package cicsservice
 
-import "github.com/prometheus/client_golang/prometheus"
+import "go.opentelemetry.io/otel"
+import "go.opentelemetry.io/otel/metric"
 
 type Metrics struct {
-	GetConnection       prometheus.Counter
-	ReturnedConnection  prometheus.Counter
-	ActiveConnection    prometheus.Gauge
-	CreateConnection    prometheus.Counter
-	DestroyConnection   prometheus.Counter
-	TransactionDuration *prometheus.HistogramVec
+	GetConnection      metric.Int64Counter
+	ReturnedConnection metric.Int64Counter
+	ActiveConnection   metric.Int64UpDownCounter
+	CreateConnection   metric.Int64Counter
+	DestroyConnection  metric.Int64Counter
+	//TransactionDuration *metric.Int64Histogram
 }
 
-var metrics *Metrics
+var meter = otel.Meter("cics-service")
 
-func NewMetrics(reg prometheus.Registerer) *Metrics {
+func NewMetrics() *Metrics {
+	gc, _ := meter.Int64Counter(
+		"cics_get_connection",
+		metric.WithDescription("Number of get connections requested."),
+	)
+
+	rc, _ := meter.Int64Counter(
+		"cics_returned_connection",
+		metric.WithDescription("Number of get connections returned to the pool."),
+	)
+	ac, _ := meter.Int64UpDownCounter(
+		"cics_active_connection",
+		metric.WithDescription("Number of active connections created"),
+	)
+	cc, _ := meter.Int64Counter(
+
+		"cics_create_connection",
+		metric.WithDescription("Number of connections created"),
+	)
+	dc, _ := meter.Int64Counter(
+		"cics_destroy_connection",
+		metric.WithDescription("Number of  connections destroyed "),
+	)
+
 	m := &Metrics{
-		GetConnection: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "cics_get_connection_count",
-			Help: "Number of get connections requested.",
-		}),
-		ReturnedConnection: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "cics_returned_connection_count",
-			Help: "Number of get connections returned to the pool.",
-		}),
-		ActiveConnection: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "cics_active_connection_count",
-			Help: "Number of active connections created",
-		}),
-		CreateConnection: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "cics_create_connection_count",
-			Help: "Number of connections created",
-		}),
-		DestroyConnection: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "cics_destroy_connection_count",
-			Help: "Number of  connections destroyed ",
-		}),
-		/*TransactionDuration: prometheus.NewHistogramVec(prometheus.HistogramVecOpts{
-			HistogramOpts: prometheus.HistogramOpts{
-
-			},
-			VariableLabels: []string{"routine"},
-		}),*/
-		TransactionDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "cics_transaction_routine_duration",
-			Help:    "Duration of transactions",
-			Buckets: prometheus.LinearBuckets(0.01, 0.01, 10),
-		}, []string{"routine"}),
+		GetConnection:      gc,
+		ReturnedConnection: rc,
+		ActiveConnection:   ac,
+		CreateConnection:   cc,
+		DestroyConnection:  dc,
 	}
-	reg.MustRegister(m.GetConnection)
-	reg.MustRegister(m.ReturnedConnection)
-	reg.MustRegister(m.ActiveConnection)
-	reg.MustRegister(m.CreateConnection)
-	reg.MustRegister(m.DestroyConnection)
-	reg.MustRegister(m.TransactionDuration)
+
 	return m
 }

@@ -11,7 +11,6 @@ import "C"
 import (
 	"context"
 	pool "github.com/jolestar/go-commons-pool/v2"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog/log"
 	"go.uber.org/fx"
 	"time"
@@ -39,15 +38,18 @@ func (p *EvictionPolicy) Evict(config *pool.EvictionConfig, underTest *pool.Pool
 type Service struct {
 	p        *pool.ObjectPool
 	Routines map[string]*RoutineConfig
+	Metrics  *Metrics
 }
 
-func NewService(lc fx.Lifecycle, config *ConnectionConfig, reg *prometheus.Registerer, routineConfig []*RoutineConfig) *Service {
-	cp := &Service{}
-	cp.Routines = GetRoutines(routineConfig)
+func NewService(lc fx.Lifecycle, config *ConnectionConfig, metrics *Metrics, routineConfig []*RoutineConfig) *Service {
+	cp := &Service{
+		Routines: GetRoutines(routineConfig),
+		Metrics:  metrics,
+	}
+
 	TokenChannel = make(chan *C.CTG_ConnToken_t, config.MaxTotal)
 	EciChannel = make(chan *C.ECI_ChannelToken_t)
 	pool.RegistryEvictionPolicy("CicsEvictionPolicy", &EvictionPolicy{})
-	metrics = NewMetrics(*reg)
 
 	pc := &pool.ObjectPoolConfig{
 		LIFO:                     true,
@@ -68,7 +70,7 @@ func NewService(lc fx.Lifecycle, config *ConnectionConfig, reg *prometheus.Regis
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			cp.p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config}, pc)
+			cp.p = pool.NewObjectPool(ctx, &ConnectionFactory{Config: config, Metrics: metrics}, pc)
 			if config.UseProxy {
 				proxyready := make(chan bool)
 				if config.ProxyPort == 0 {
@@ -143,14 +145,14 @@ func (s *Service) GetConnection(ctx context.Context) (*Connection, error) {
 		s.p.InvalidateObject(ctx, cicsConnection)
 		return s.GetConnection(ctx)
 	}
-	metrics.GetConnection.Inc()
-	metrics.ActiveConnection.Inc()
+	s.Metrics.GetConnection.Add(ctx, 1)
+	s.Metrics.ActiveConnection.Add(ctx, 1)
 	return connection, nil
 }
 
 func (s *Service) ReturnConnection(ctx context.Context, cicsConnection *Connection) error {
-	metrics.ReturnedConnection.Inc()
-	metrics.ActiveConnection.Dec()
+	s.Metrics.ReturnedConnection.Add(ctx, 1)
+	s.Metrics.ActiveConnection.Add(ctx, -1)
 	return s.p.ReturnObject(ctx, cicsConnection)
 }
 

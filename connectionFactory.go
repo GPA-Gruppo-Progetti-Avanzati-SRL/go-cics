@@ -28,7 +28,8 @@ type Connection struct {
 }
 
 type ConnectionFactory struct {
-	Config *ConnectionConfig
+	Config  *ConnectionConfig
+	Metrics *Metrics
 }
 
 var TokenChannel chan *C.CTG_ConnToken_t
@@ -43,7 +44,7 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 	if err != nil {
 		return nil, err
 	}
-	metrics.CreateConnection.Inc()
+	f.Metrics.CreateConnection.Add(ctx, 1)
 	return pool.NewPooledObject(
 			&Connection{
 				ConnectionToken: (*C.CTG_ConnToken_t)(ptr),
@@ -55,7 +56,7 @@ func (f *ConnectionFactory) MakeObject(ctx context.Context) (*pool.PooledObject,
 func (f *ConnectionFactory) DestroyObject(ctx context.Context, object *pool.PooledObject) error {
 	log.Trace().Msg("Destroy connection")
 	o := object.Object.(*Connection)
-	metrics.DestroyConnection.Inc()
+	f.Metrics.DestroyConnection.Add(ctx, 1)
 	if o.ConnectionToken != nil {
 		log.Trace().Msg("Destroy Connection Token")
 		TokenChannel <- o.ConnectionToken

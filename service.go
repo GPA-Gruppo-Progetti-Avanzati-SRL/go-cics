@@ -43,7 +43,7 @@ type Service struct {
 
 func NewService(lc fx.Lifecycle, config *ConnectionConfig, reg *prometheus.Registerer, routineConfig []*RoutineConfig) *Service {
 	cp := &Service{}
-	cp.r = GetRoutines(routineConfig)
+	cp.Routines = GetRoutines(routineConfig)
 	TokenChannel = make(chan *C.CTG_ConnToken_t, config.MaxTotal)
 	EciChannel = make(chan *C.ECI_ChannelToken_t)
 	pool.RegistryEvictionPolicy("CicsEvictionPolicy", &EvictionPolicy{})

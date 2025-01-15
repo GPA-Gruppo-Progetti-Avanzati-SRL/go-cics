@@ -1,4 +1,4 @@
-package cics
+package cicsservice
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-package cics
+package cicsservice
 
 type HeaderV2 struct {
 	ABIBanca           string `mainframe:"start=1,length=5"`

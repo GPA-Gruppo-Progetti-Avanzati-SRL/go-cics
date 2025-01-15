@@ -1,4 +1,4 @@
-package cics
+package cicsservice
 
 type ConnectionConfig struct {
 	Hostname             string `mapstructure:"hostname"`

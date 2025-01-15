@@ -1,4 +1,4 @@
-package cics
+package cicsservice
 
 /*
 #include  <ctgclient_eci.h>
@@ -49,6 +49,7 @@ func (cr *Routine) TransactV3(ctx context.Context) *TransactionError {
 }
 
 func (cr *Routine) Transact(ctx context.Context) *TransactionError {
+
 	for key, element := range cr.InputContainer {
 		log.Trace().Msgf("INPUTCONTAINER %s-%s*EOC*", key, element)
 	}
@@ -80,6 +81,11 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 		return &TransactionError{ErrorCode: CICSLIBERRORCODE,
 			ErrorMessage: "No Cics connection Present"}
 	}
+	start := time.Now()
+	defer func() {
+		metrics.TransactionDuration.WithLabelValues(cr.Config.ProgramName).Observe(time.Since(start).Seconds())
+	}()
+
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)
 	defer cancel()
 	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken

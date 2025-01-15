@@ -4,12 +4,12 @@ import "go.opentelemetry.io/otel"
 import "go.opentelemetry.io/otel/metric"
 
 type Metrics struct {
-	GetConnection      metric.Int64Counter
-	ReturnedConnection metric.Int64Counter
-	ActiveConnection   metric.Int64UpDownCounter
-	CreateConnection   metric.Int64Counter
-	DestroyConnection  metric.Int64Counter
-	//TransactionDuration *metric.Int64Histogram
+	GetConnection       metric.Int64Counter
+	ReturnedConnection  metric.Int64Counter
+	ActiveConnection    metric.Int64UpDownCounter
+	CreateConnection    metric.Int64Counter
+	DestroyConnection   metric.Int64Counter
+	TransactionDuration metric.Int64Histogram
 }
 
 var meter = otel.Meter("cics-service")
@@ -37,13 +37,15 @@ func NewMetrics() *Metrics {
 		"cics_destroy_connection",
 		metric.WithDescription("Number of  connections destroyed "),
 	)
+	td, _ := meter.Int64Histogram("cics_transaction_duration", metric.WithDescription("The duration of a transaction."), metric.WithUnit("ms"))
 
 	m := &Metrics{
-		GetConnection:      gc,
-		ReturnedConnection: rc,
-		ActiveConnection:   ac,
-		CreateConnection:   cc,
-		DestroyConnection:  dc,
+		GetConnection:       gc,
+		ReturnedConnection:  rc,
+		ActiveConnection:    ac,
+		CreateConnection:    cc,
+		DestroyConnection:   dc,
+		TransactionDuration: td,
 	}
 
 	return m

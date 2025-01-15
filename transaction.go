@@ -11,6 +11,8 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"time"
 	"unsafe"
 
@@ -21,6 +23,7 @@ import (
 type Routine struct {
 	Config          *RoutineConfig
 	Connection      *Connection
+	Metrics         *Metrics
 	InputContainer  map[string][]byte
 	OutputContainer map[string][]byte
 }
@@ -83,7 +86,7 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 	}
 	start := time.Now()
 	defer func() {
-		metrics.TransactionDuration.WithLabelValues(cr.Config.ProgramName).Observe(time.Since(start).Seconds())
+		cr.Metrics.TransactionDuration.Record(ctx, time.Since(start).Milliseconds(), metric.WithAttributes(attribute.String("program", cr.Config.ProgramName)))
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)

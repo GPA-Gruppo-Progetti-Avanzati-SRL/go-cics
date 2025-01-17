@@ -144,12 +144,12 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 		conntoken := connection.ConnectionToken
 		TokenChannel <- conntoken
 		connection.ConnectionToken = nil
-		return nil, TechnicalErrorFromTransaction(cr.Name, displayRc(ctgRc))
+		return nil, TechnicalErrorFromTransaction(cr.Config.ProgramName, displayRc(ctgRc))
 	}
 
 	oc, err := cr.getOutputContainer(token)
 	if err != nil {
-		return nil, TechnicalErrorFromTransaction(cr.Name, err)
+		return nil, TechnicalErrorFromTransaction(cr.Config.ProgramName, err)
 	}
 
 	return oc, nil
@@ -198,7 +198,7 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.Applic
 	header := &HeaderV3{}
 	err := Unmarshal(headerm, header)
 	if err != nil {
-		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
+		return TechnicalErrorFromTransaction(cr.Config.ProgramName, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "Unable to unmarshal header V3",
 		})
@@ -209,13 +209,13 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.Applic
 	if header.ReturnCode == "000" || header.ReturnCode == "00000" {
 		return nil
 	}
-	return BusinessErroFromTransaction(cr.Name, getErrorContainer(oc[ERRORE]))
+	return BusinessErroFromTransaction(cr.Config.ProgramName, getErrorContainer(oc[ERRORE]))
 
 }
 
 func (cr *Routine[I, O]) checkOutputContainerV2(oc map[string][]byte) *core.ApplicationError {
 
-	headerm, applicationError := getHeaderContainer(cr.Name, oc)
+	headerm, applicationError := getHeaderContainer(cr.Config.ProgramName, oc)
 	if applicationError != nil {
 		return applicationError
 	}
@@ -257,7 +257,11 @@ func getHeaderContainer(name string, oc map[string][]byte) ([]byte, *core.Applic
 
 func getErrorContainer(s []byte) *TransactionError {
 	err := &TransactionError{}
-	Unmarshal(s, err)
+	errUm := Unmarshal(s, err)
+	if errUm != nil {
+		log.Warn().Msgf("Unable to unmarshal  Error : %s", string(s))
+	}
+	log.Trace().Msgf("Return Error : %v\n", err)
 	return err
 }
 

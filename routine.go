@@ -44,21 +44,73 @@ func (cr *Routine[I, O]) TransactParsed() *TransactionError {
 
 func (cr *Routine[I, O]) TransactV3(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
 
-	return cr.transact(ctx, connection, input, BuildHeaderV3, cr.checkOutputContainerV3)
+	return cr.transact(ctx, connection, input, cr.BuildHeaderV3, cr.checkOutputContainerV3)
 }
 func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
 
-	return cr.transact(ctx, connection, input, BuildHeaderV2, cr.checkOutputContainerV2)
+	return cr.transact(ctx, connection, input, cr.BuildHeaderV2, cr.checkOutputContainerV2)
 
 }
 
-func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input *I, hf func(*RequestInfo, *RoutineConfig) Header, ppf func(map[string][]byte) *core.ApplicationError) (*O, *core.ApplicationError) {
+func (cr *Routine[I, O]) BuildHeaderV2() Header {
+	conversion := "N"
+	log_level := "N"
+
+	header := &HeaderV2{
+		ABIBanca:           "07601",
+		ProgramName:        cr.Config.ProgramName,
+		Conversion:         conversion,
+		FlagDebug:          "",
+		LogLevel:           log_level,
+		ErrorDescription:   "",
+		RequestIdClient:    cr.RequestInfo.RequestId,
+		CorrelationIdPoste: cr.RequestInfo.TrackId,
+		RequestIdLegacy:    cr.RequestInfo.RequestId,
+		TransId:            cr.Config.TransId,
+	}
+	return header
+
+}
+
+func (cr *Routine[I, O]) BuildHeaderV3() Header {
+
+	requestInfo := cr.RequestInfo
+	config := cr.Config
+
+	log_level := "N"
+	idem_potence := "N"
+	requestInfo.TransactionSequence++
+	subRequestId := fmt.Sprintf("%d%02d-%s", requestInfo.OrchestrationSequence, requestInfo.TransactionSequence, config.ProgramName)
+
+	header := &HeaderV3{
+		Version:          "VER1.0",
+		ProgramName:      config.ProgramName,
+		TransId:          config.TransId,
+		SystemId:         requestInfo.SystemId,
+		Canale:           requestInfo.Canale,
+		Conversion:       CONVERSION,
+		FlagDebug:        DEBUG,
+		LogLevel:         log_level,
+		RollBack:         "",
+		ReturnCode:       "",
+		ErrorDescription: "",
+		FlagCheckIdem:    idem_potence,
+		CicsTargetPool:   "",
+		TrackingId:       requestInfo.TrackId,
+		RequestId:        requestInfo.RequestId,
+		SubRequestId:     subRequestId,
+	}
+
+	return header
+}
+
+func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input *I, hf func() Header, ppf func(map[string][]byte) *core.ApplicationError) (*O, *core.ApplicationError) {
 
 	ic, ierr := cr.GenerateInputContainerFromInput(input)
 	if ierr != nil {
 		return nil, ierr
 	}
-	header, herr := fixedwidth.Marshal(hf(cr.RequestInfo, cr.Config))
+	header, herr := fixedwidth.Marshal(hf())
 	if herr != nil {
 		return nil, core.TechnicalErrorWithError(herr)
 	}
@@ -133,9 +185,10 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 	}
 
 	if errCO := ppf(oc); errCO != nil {
+		log.Trace().Msgf("Ho container error %s", errCO.Error())
 		return nil, errCO
 	}
-
+	log.Trace().Msgf("Genero Output")
 	return cr.GenerateOutputFromOutputContainer(oc)
 
 }
@@ -307,9 +360,9 @@ func (cr *Routine[I, O]) setAuth(eciParms *C.CTG_ECI_PARMS, user *C.char, passwd
 
 func convertToAscii(data []byte) []byte {
 	decoder := charmap.CodePage037.NewDecoder()
-	output, error := decoder.Bytes(data)
-	if error != nil {
-		fmt.Println("Error ", error)
+	output, errorD := decoder.Bytes(data)
+	if errorD != nil {
+		log.Error().Err(errorD).Msgf("Error %s ", errorD.Error())
 	}
 	return output
 }

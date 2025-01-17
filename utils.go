@@ -1,7 +1,6 @@
 package cicsservice
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
 )
@@ -49,53 +48,4 @@ func ClearString(s string) string {
 		return -1
 	}, s1)
 	return s1
-}
-
-func BuildHeaderV2(RequestInfo *RequestInfo, config *RoutineConfig) Header {
-	conversion := "N"
-	log_level := "N"
-
-	header := &HeaderV2{
-		ABIBanca:           "07601",
-		ProgramName:        config.ProgramName,
-		Conversion:         conversion,
-		FlagDebug:          "",
-		LogLevel:           log_level,
-		ErrorDescription:   "",
-		RequestIdClient:    RequestInfo.RequestId,
-		CorrelationIdPoste: RequestInfo.TrackId,
-		RequestIdLegacy:    RequestInfo.RequestId,
-		TransId:            config.TransId,
-	}
-	return header
-
-}
-
-func BuildHeaderV3(requestInfo *RequestInfo, config *RoutineConfig) Header {
-
-	log_level := "N"
-	idem_potence := "N"
-	requestInfo.TransactionSequence++
-	subRequestId := fmt.Sprintf("%d%02d-%s", requestInfo.OrchestrationSequence, requestInfo.TransactionSequence, config.ProgramName)
-
-	header := &HeaderV3{
-		Version:          "VER1.0",
-		ProgramName:      config.ProgramName,
-		TransId:          config.TransId,
-		SystemId:         requestInfo.SystemId,
-		Canale:           requestInfo.Canale,
-		Conversion:       CONVERSION,
-		FlagDebug:        DEBUG,
-		LogLevel:         log_level,
-		RollBack:         "",
-		ReturnCode:       "",
-		ErrorDescription: "",
-		FlagCheckIdem:    idem_potence,
-		CicsTargetPool:   "",
-		TrackingId:       requestInfo.TrackId,
-		RequestId:        requestInfo.RequestId,
-		SubRequestId:     subRequestId,
-	}
-
-	return header
 }

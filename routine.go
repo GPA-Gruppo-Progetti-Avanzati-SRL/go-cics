@@ -44,49 +44,27 @@ func (cr *Routine[I, O]) TransactParsed() *TransactionError {
 
 func (cr *Routine[I, O]) TransactV3(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
 
+	return cr.transact(ctx, connection, input, BuildHeaderV3, cr.checkOutputContainerV3)
+}
+func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
+
+	return cr.transact(ctx, connection, input, BuildHeaderV2, cr.checkOutputContainerV2)
+
+}
+
+func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input *I, hf func(*RequestInfo, *RoutineConfig) Header, ppf func(map[string][]byte) *core.ApplicationError) (*O, *core.ApplicationError) {
+
 	ic, ierr := cr.GenerateInputContainerFromInput(input)
 	if ierr != nil {
 		return nil, ierr
 	}
-	header, herr := fixedwidth.Marshal(BuildHeaderV3(cr.RequestInfo, cr.Config))
+	header, herr := fixedwidth.Marshal(hf(cr.RequestInfo, cr.Config))
 	if herr != nil {
 		return nil, core.TechnicalErrorWithError(herr)
 	}
 	ic[HEADER] = header
-	oc, errTransaction := cr.transact(ctx, connection, ic)
-	if errTransaction != nil {
-		return nil, core.TechnicalErrorWithError(errTransaction)
-	}
-	if errCO := cr.checkOutputContainer(ic); errCO != nil {
-		return nil, errCO
-	}
-	return cr.GenerateOutputFromOutputContainer(oc)
-}
-func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
 
-	ic, err := cr.GenerateInputContainerFromInput(input)
-	if err != nil {
-		return nil, err
-	}
-	header, herr := fixedwidth.Marshal(BuildHeaderV2(cr.RequestInfo, cr.Config))
-	if herr != nil {
-		return nil, core.TechnicalErrorWithError(herr)
-	}
-	ic[HEADER] = header
-	oc, errTransaction := cr.transact(ctx, connection, ic)
-	if errTransaction != nil {
-		return nil, core.TechnicalErrorWithError(errTransaction)
-	}
-	if errCO := cr.checkOutputContainerV2(ic); errCO != nil {
-		return nil, errCO
-	}
-
-	return cr.GenerateOutputFromOutputContainer(oc)
-}
-
-func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input map[string][]byte) (map[string][]byte, *core.ApplicationError) {
-
-	for key, element := range input {
+	for key, element := range ic {
 		log.Trace().Msgf("INPUTCONTAINER %s-%s*EOC*", key, element)
 	}
 
@@ -100,7 +78,7 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 		EciChannel <- &token
 	}()
 
-	errinput := cr.buildContainer(token, input)
+	errinput := cr.buildContainer(token, ic)
 	if errinput != nil {
 		return nil, core.TechnicalErrorWithError(errinput)
 	}
@@ -154,7 +132,12 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 		return nil, TechnicalErrorFromTransaction(cr.Config.ProgramName, err)
 	}
 
-	return oc, nil
+	if errCO := ppf(oc); errCO != nil {
+		return nil, errCO
+	}
+
+	return cr.GenerateOutputFromOutputContainer(oc)
+
 }
 
 func (cr *Routine[I, O]) getOutputContainer(token C.ECI_ChannelToken_t) (map[string][]byte, *TransactionError) {
@@ -190,7 +173,7 @@ func (cr *Routine[I, O]) getOutputContainer(token C.ECI_ChannelToken_t) (map[str
 	return oc, nil
 }
 
-func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.ApplicationError {
+func (cr *Routine[I, O]) checkOutputContainerV3(oc map[string][]byte) *core.ApplicationError {
 
 	headerm, applicationError := getHeaderContainer(cr.Name, oc)
 	if applicationError != nil {

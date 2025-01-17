@@ -51,7 +51,7 @@ func ClearString(s string) string {
 	return s1
 }
 
-func BuildHeaderV2(RequestInfo *RequestInfo, config *RoutineConfig) *HeaderV2 {
+func BuildHeaderV2(RequestInfo *RequestInfo, config *RoutineConfig) Header {
 	conversion := "N"
 	log_level := "N"
 
@@ -71,7 +71,7 @@ func BuildHeaderV2(RequestInfo *RequestInfo, config *RoutineConfig) *HeaderV2 {
 
 }
 
-func BuildHeaderV3(requestInfo *RequestInfo, config *RoutineConfig) *HeaderV3 {
+func BuildHeaderV3(requestInfo *RequestInfo, config *RoutineConfig) Header {
 
 	log_level := "N"
 	idem_potence := "N"

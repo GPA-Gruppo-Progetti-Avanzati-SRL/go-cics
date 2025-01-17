@@ -100,7 +100,7 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 	if errinput != nil {
 		return nil, core.TechnicalErrorWithError(errinput)
 	}
-	var eciParms C.CTG_ECI_PARMS = cr.getEciParams(token)
+	var eciParms C.CTG_ECI_PARMS = cr.getEciParams(token, connection)
 	if connection.Config.UserName != "" && connection.Config.Password != "" {
 		pUserName := C.CString(connection.Config.UserName)
 		pPassword := C.CString(connection.Config.Password)

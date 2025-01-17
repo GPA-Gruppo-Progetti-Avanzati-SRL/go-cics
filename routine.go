@@ -223,7 +223,7 @@ func (cr *Routine[I, O]) checkOutputContainerV2(oc map[string][]byte) *core.Appl
 	}
 
 	header := &HeaderV2{}
-	err := Unmarshal(headerm, header)
+	err := fixedwidth.Unmarshal(headerm, header)
 	if err != nil {
 		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,

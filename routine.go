@@ -76,6 +76,10 @@ func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection,
 	if errTransaction != nil {
 		return nil, core.TechnicalErrorWithError(errTransaction)
 	}
+	errCO := cr.checkOutputContainerV2(ic)
+	if errCO != nil {
+		return nil, core.TechnicalErrorWithError(errCO)
+	}
 
 	return cr.GenerateOutputFromOutputContainer(oc)
 }
@@ -188,18 +192,9 @@ func (cr *Routine[I, O]) getOutputContainer(token C.ECI_ChannelToken_t) (map[str
 
 func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.ApplicationError {
 
-	if oc == nil {
-		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
-			ErrorCode:    CICSLIBERRORCODE,
-			ErrorMessage: "no container present",
-		})
-	}
-	headerm, ok := oc[HEADER]
-	if !ok {
-		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
-			ErrorCode:    CICSLIBERRORCODE,
-			ErrorMessage: "no container header present",
-		})
+	headerm, applicationError := getHeaderContainer(cr.Name, oc)
+	if applicationError != nil {
+		return applicationError
 	}
 
 	header := &HeaderV3{}
@@ -207,17 +202,59 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.Applic
 	if err != nil {
 		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
-			ErrorMessage: "Unable to unmarshal header",
+			ErrorMessage: "Unable to unmarshal header V3",
 		})
 	}
 
-	log.Trace().Msgf("Return Header : %v\n", header)
+	log.Trace().Msgf("Return Header V3 : %v\n", header)
 
 	if header.ReturnCode == "000" || header.ReturnCode == "00000" {
 		return nil
 	}
 	return BusinessErroFromTransaction(cr.Name, getErrorContainer(oc[ERRORE]))
 
+}
+
+func (cr *Routine[I, O]) checkOutputContainerV2(oc map[string][]byte) *core.ApplicationError {
+
+	headerm, applicationError := getHeaderContainer(cr.Name, oc)
+	if applicationError != nil {
+		return applicationError
+	}
+
+	header := &HeaderV2{}
+	err := Unmarshal(headerm, header)
+	if err != nil {
+		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
+			ErrorCode:    CICSLIBERRORCODE,
+			ErrorMessage: "Unable to unmarshal header V2 ",
+		})
+	}
+
+	log.Trace().Msgf("Return Header V2 : %v\n", header)
+
+	if header.CicsResponseCode == "000" || header.CicsResponse2Code == "00000" {
+		return nil
+	}
+	return BusinessErroFromTransaction(cr.Name, getErrorContainer(oc[ERRORE]))
+
+}
+
+func getHeaderContainer(name string, oc map[string][]byte) ([]byte, *core.ApplicationError) {
+	if oc == nil {
+		return nil, TechnicalErrorFromTransaction(name, &TransactionError{
+			ErrorCode:    CICSLIBERRORCODE,
+			ErrorMessage: "no container present",
+		})
+	}
+	headerm, ok := oc[HEADER]
+	if !ok {
+		return nil, TechnicalErrorFromTransaction(name, &TransactionError{
+			ErrorCode:    CICSLIBERRORCODE,
+			ErrorMessage: "no container header present",
+		})
+	}
+	return headerm, nil
 }
 
 func getErrorContainer(s []byte) *TransactionError {

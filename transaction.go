@@ -42,9 +42,9 @@ func (cr *Routine[I, O]) TransactParsed() *TransactionError {
 
 func (cr *Routine[I, O]) TransactV3(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
 
-	ic, err := cr.GenerateInputContainerFromInput(input)
-	if err != nil {
-		return nil, err
+	ic, ierr := cr.GenerateInputContainerFromInput(input)
+	if ierr != nil {
+		return nil, ierr
 	}
 	header, herr := Marshal(BuildHeaderV3(cr.RequestInfo, cr.Config))
 	if herr != nil {
@@ -80,7 +80,7 @@ func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection,
 	return cr.GenerateOutputFromOutputContainer(oc)
 }
 
-func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input map[string][]byte) (map[string][]byte, *TransactionError) {
+func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input map[string][]byte) (map[string][]byte, *core.ApplicationError) {
 
 	for key, element := range input {
 		log.Trace().Msgf("INPUTCONTAINER %s-%s*EOC*", key, element)
@@ -96,9 +96,9 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 		EciChannel <- &token
 	}()
 
-	errinput := cr.buildContainer(token)
+	errinput := cr.buildContainer(token, input)
 	if errinput != nil {
-		return nil, errinput
+		return nil, core.TechnicalErrorWithError(errinput)
 	}
 	var eciParms C.CTG_ECI_PARMS = cr.getEciParams(token)
 	if connection.Config.UserName != "" && connection.Config.Password != "" {
@@ -110,8 +110,8 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 	}
 
 	if connection.ConnectionToken == nil {
-		return nil, &TransactionError{ErrorCode: CICSLIBERRORCODE,
-			ErrorMessage: "No Cics connection Present"}
+		return nil, TechnicalErrorFromTransaction(cr.Name, &TransactionError{ErrorCode: CICSLIBERRORCODE,
+			ErrorMessage: "No Cics connection Present"})
 	}
 	start := time.Now()
 	defer func() {
@@ -142,12 +142,12 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 		conntoken := connection.ConnectionToken
 		TokenChannel <- conntoken
 		connection.ConnectionToken = nil
-		return nil, displayRc(ctgRc)
+		return nil, TechnicalErrorFromTransaction(cr.Name, displayRc(ctgRc))
 	}
 
 	oc, err := cr.getOutputContainer(token)
 	if err != nil {
-		return nil, err
+		return nil, TechnicalErrorFromTransaction(cr.Name, err)
 	}
 
 	return oc, nil
@@ -186,28 +186,28 @@ func (cr *Routine[I, O]) getOutputContainer(token C.ECI_ChannelToken_t) (map[str
 	return oc, nil
 }
 
-func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *TransactionError {
+func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.ApplicationError {
 
 	if oc == nil {
-		return &TransactionError{
+		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container present",
-		}
+		})
 	}
 	if len(oc[HEADER]) == 0 {
-		return &TransactionError{
+		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container header present",
-		}
+		})
 	}
 
 	header := &HeaderV3{}
 	err := Unmarshal(oc[HEADER], header)
 	if err != nil {
-		return &TransactionError{
+		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "Unable to unmarshal header",
-		}
+		})
 	}
 
 	log.Trace().Msgf("Return Header : %v\n", header)
@@ -215,7 +215,7 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *Transaction
 	if header.ReturnCode == "000" || header.ReturnCode == "00000" {
 		return nil
 	}
-	return getErrorContainer(oc[ERRORE])
+	return BusinessErroFromTransaction(cr.Name, getErrorContainer(oc[ERRORE]))
 
 }
 
@@ -225,17 +225,17 @@ func getErrorContainer(s []byte) *TransactionError {
 	return err
 }
 
-func (cr *Routine[I, O]) buildContainer(token C.ECI_ChannelToken_t, ic map[string][]byte) *TransactionError {
+func (cr *Routine[I, O]) buildContainer(token C.ECI_ChannelToken_t, ic map[string][]byte) *core.ApplicationError {
 
 	for key, element := range ic {
 		pKey := C.CString(key)
 		ctgRc := C.ECI_createContainer(token, pKey, C.ECI_CHAR, 0, unsafe.Pointer(&element[0]), C.ulong(len(element)))
 		C.free(unsafe.Pointer(pKey))
 		if ctgRc != C.ECI_NO_ERROR {
-			return &TransactionError{
+			return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 				ErrorCode:    CICSLIBERRORCODE,
 				ErrorMessage: "Errore set Container Input : " + key,
-			}
+			})
 		}
 
 	}

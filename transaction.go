@@ -11,6 +11,7 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"github.com/GPA-Gruppo-Progetti-Avanzati-SRL/go-core-app"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"time"
@@ -20,12 +21,13 @@ import (
 	"golang.org/x/text/encoding/charmap"
 )
 
-type Routine struct {
-	Config          *RoutineConfig
-	Connection      *Connection
-	Metrics         *Metrics
-	InputContainer  map[string][]byte
-	OutputContainer map[string][]byte
+type Routine[I, O any] struct {
+	Name                              string
+	Config                            *RoutineConfig
+	RequestInfo                       *RequestInfo
+	Metrics                           *Metrics
+	GenerateInputContainerFromInput   func(*I) (map[string][]byte, *core.ApplicationError)
+	GenerateOutputFromOutputContainer func(map[string][]byte) (*O, *core.ApplicationError)
 }
 
 const HEADER = "HEADER"
@@ -34,26 +36,53 @@ const ERRORE = "ERRORE"
 const OUTPUT = "OUTPUT"
 const CICSLIBERRORCODE = "99999"
 
-func (cr *Routine) TransactParsed() *TransactionError {
+func (cr *Routine[I, O]) TransactParsed() *TransactionError {
 	return nil
 }
 
-func (cr *Routine) TransactV3(ctx context.Context) *TransactionError {
+func (cr *Routine[I, O]) TransactV3(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
 
-	err := cr.Transact(ctx)
+	ic, err := cr.GenerateInputContainerFromInput(input)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = cr.checkOutputContainer()
+	header, herr := Marshal(BuildHeaderV3(cr.RequestInfo, cr.Config))
+	if herr != nil {
+		return nil, core.TechnicalErrorWithError(herr)
+	}
+	ic[HEADER] = header
+	oc, errTransaction := cr.transact(ctx, connection, ic)
+	if errTransaction != nil {
+		return nil, core.TechnicalErrorWithError(errTransaction)
+	}
+	errCO := cr.checkOutputContainer(ic)
+	if errCO != nil {
+		return nil, core.TechnicalErrorWithError(errCO)
+	}
+	return cr.GenerateOutputFromOutputContainer(oc)
+}
+func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection, input *I) (*O, *core.ApplicationError) {
+
+	ic, err := cr.GenerateInputContainerFromInput(input)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	header, herr := Marshal(BuildHeaderV2(cr.RequestInfo, cr.Config))
+	if herr != nil {
+		return nil, core.TechnicalErrorWithError(herr)
+	}
+	ic[HEADER] = header
+	oc, errTransaction := cr.transact(ctx, connection, ic)
+	if errTransaction != nil {
+		return nil, core.TechnicalErrorWithError(errTransaction)
+	}
+
+	return cr.GenerateOutputFromOutputContainer(oc)
 }
 
-func (cr *Routine) Transact(ctx context.Context) *TransactionError {
+func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, input map[string][]byte) (map[string][]byte, *TransactionError) {
 
-	for key, element := range cr.InputContainer {
+	for key, element := range input {
 		log.Trace().Msgf("INPUTCONTAINER %s-%s*EOC*", key, element)
 	}
 
@@ -69,19 +98,19 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 
 	errinput := cr.buildContainer(token)
 	if errinput != nil {
-		return errinput
+		return nil, errinput
 	}
 	var eciParms C.CTG_ECI_PARMS = cr.getEciParams(token)
-	if cr.Connection.Config.UserName != "" && cr.Connection.Config.Password != "" {
-		pUserName := C.CString(cr.Connection.Config.UserName)
-		pPassword := C.CString(cr.Connection.Config.Password)
+	if connection.Config.UserName != "" && connection.Config.Password != "" {
+		pUserName := C.CString(connection.Config.UserName)
+		pPassword := C.CString(connection.Config.Password)
 		defer C.free(unsafe.Pointer(pUserName))
 		defer C.free(unsafe.Pointer(pPassword))
 		cr.setAuth(&eciParms, pUserName, pPassword)
 	}
 
-	if cr.Connection.ConnectionToken == nil {
-		return &TransactionError{ErrorCode: CICSLIBERRORCODE,
+	if connection.ConnectionToken == nil {
+		return nil, &TransactionError{ErrorCode: CICSLIBERRORCODE,
 			ErrorMessage: "No Cics connection Present"}
 	}
 	start := time.Now()
@@ -89,12 +118,12 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 		cr.Metrics.TransactionDuration.Record(ctx, time.Since(start).Milliseconds(), metric.WithAttributes(attribute.String("program", cr.Config.ProgramName)))
 	}()
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cr.Connection.Config.Timeout+1)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(connection.Config.Timeout+1)*time.Second)
 	defer cancel()
-	var ctoken C.CTG_ConnToken_t = *cr.Connection.ConnectionToken
+	var ctoken C.CTG_ConnToken_t = *connection.ConnectionToken
 	var ctgRc C.int
 	processDone := make(chan bool)
-	log.Debug().Msgf("Execute Channel Transaction with timeout %d", cr.Connection.Config.Timeout+1)
+	log.Debug().Msgf("Execute Channel Transaction with timeout %d", connection.Config.Timeout+1)
 	go func(ctgRc C.int) {
 		ctgRc = C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
 		processDone <- true
@@ -110,18 +139,22 @@ func (cr *Routine) Transact(ctx context.Context) *TransactionError {
 
 	if ctgRc != C.ECI_NO_ERROR {
 		log.Trace().Msg("Ho errore")
-		conntoken := cr.Connection.ConnectionToken
+		conntoken := connection.ConnectionToken
 		TokenChannel <- conntoken
-		cr.Connection.ConnectionToken = nil
-		return displayRc(ctgRc)
+		connection.ConnectionToken = nil
+		return nil, displayRc(ctgRc)
 	}
 
-	err := cr.getOutputContainer(token)
-	return err
+	oc, err := cr.getOutputContainer(token)
+	if err != nil {
+		return nil, err
+	}
+
+	return oc, nil
 }
 
-func (cr *Routine) getOutputContainer(token C.ECI_ChannelToken_t) *TransactionError {
-	cr.OutputContainer = make(map[string][]byte)
+func (cr *Routine[I, O]) getOutputContainer(token C.ECI_ChannelToken_t) (map[string][]byte, *TransactionError) {
+	oc := make(map[string][]byte)
 	var contInfo C.ECI_CONTAINER_INFO
 	ctgRc := C.ECI_getFirstContainer(token, &contInfo)
 	for ctgRc == C.ECI_NO_ERROR {
@@ -145,23 +178,23 @@ func (cr *Routine) getOutputContainer(token C.ECI_ChannelToken_t) *TransactionEr
 			containerContentSlice = convertToAscii(containerContentSlice)
 		}
 
-		cr.OutputContainer[containerName] = containerContentSlice
+		oc[containerName] = containerContentSlice
 		log.Trace().Msgf("OUTPUTCONTAINER , %s-%s*EOC*", containerName, containerContentSlice)
 		C.free(dataBuff)
 		ctgRc = C.ECI_getNextContainer(token, &contInfo)
 	}
-	return nil
+	return oc, nil
 }
 
-func (cr *Routine) checkOutputContainer() *TransactionError {
+func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *TransactionError {
 
-	if cr.OutputContainer == nil {
+	if oc == nil {
 		return &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container present",
 		}
 	}
-	if len(cr.OutputContainer[HEADER]) == 0 {
+	if len(oc[HEADER]) == 0 {
 		return &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container header present",
@@ -169,7 +202,7 @@ func (cr *Routine) checkOutputContainer() *TransactionError {
 	}
 
 	header := &HeaderV3{}
-	err := Unmarshal(cr.OutputContainer[HEADER], header)
+	err := Unmarshal(oc[HEADER], header)
 	if err != nil {
 		return &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
@@ -182,7 +215,7 @@ func (cr *Routine) checkOutputContainer() *TransactionError {
 	if header.ReturnCode == "000" || header.ReturnCode == "00000" {
 		return nil
 	}
-	return getErrorContainer(cr.OutputContainer[ERRORE])
+	return getErrorContainer(oc[ERRORE])
 
 }
 
@@ -192,8 +225,9 @@ func getErrorContainer(s []byte) *TransactionError {
 	return err
 }
 
-func (cr *Routine) buildContainer(token C.ECI_ChannelToken_t) *TransactionError {
-	for key, element := range cr.InputContainer {
+func (cr *Routine[I, O]) buildContainer(token C.ECI_ChannelToken_t, ic map[string][]byte) *TransactionError {
+
+	for key, element := range ic {
 		pKey := C.CString(key)
 		ctgRc := C.ECI_createContainer(token, pKey, C.ECI_CHAR, 0, unsafe.Pointer(&element[0]), C.ulong(len(element)))
 		C.free(unsafe.Pointer(pKey))
@@ -208,20 +242,20 @@ func (cr *Routine) buildContainer(token C.ECI_ChannelToken_t) *TransactionError 
 	return nil
 }
 
-func (cr *Routine) getEciParams(token C.ECI_ChannelToken_t) C.CTG_ECI_PARMS {
+func (cr *Routine[I, O]) getEciParams(token C.ECI_ChannelToken_t, connection *Connection) C.CTG_ECI_PARMS {
 	var eciParms C.CTG_ECI_PARMS
 	/* ECI parameter block */
 	programName := cr.Config.CicsGatewayName
 	transId := cr.Config.TransId
 	tpn := ""
-	serverName := cr.Connection.Config.ServerName
+	serverName := connection.Config.ServerName
 
 	eciParms.eci_version = C.ECI_VERSION_2A /* ECI version 2A          */
 	eciParms.eci_call_type = C.ECI_SYNC     /* Synchronous ECI call    */
 
-	eciParms.eci_extend_mode = C.ECI_NO_EXTEND                   /* Non-extended call       */
-	eciParms.eci_luw_token = C.ECI_LUW_NEW                       /* Zero for a new LUW      */
-	eciParms.eci_timeout = C.short(cr.Connection.Config.Timeout) /* Timeout in seconds      */
+	eciParms.eci_extend_mode = C.ECI_NO_EXTEND                /* Non-extended call       */
+	eciParms.eci_luw_token = C.ECI_LUW_NEW                    /* Zero for a new LUW      */
+	eciParms.eci_timeout = C.short(connection.Config.Timeout) /* Timeout in seconds      */
 
 	programNameChar := [8]C.char{}
 	serverNameChar := [8]C.char{}
@@ -239,7 +273,7 @@ func (cr *Routine) getEciParams(token C.ECI_ChannelToken_t) C.CTG_ECI_PARMS {
 	eciParms.channel = token
 	return eciParms
 }
-func (cr *Routine) setAuth(eciParms *C.CTG_ECI_PARMS, user *C.char, passwd *C.char) {
+func (cr *Routine[I, O]) setAuth(eciParms *C.CTG_ECI_PARMS, user *C.char, passwd *C.char) {
 
 	eciParms.eci_userid_ptr = user
 	eciParms.eci_password_ptr = passwd

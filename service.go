@@ -23,15 +23,15 @@ type EvictionPolicy struct {
 // Evict do evict by config
 func (p *EvictionPolicy) Evict(config *pool.EvictionConfig, underTest *pool.PooledObject, idleCount int) bool {
 	idleTime := underTest.GetIdleTime()
-	log.Trace().Msgf("Test Evict Config idle soft evict time : %d - idleTime : %d - idleCount : %d   - config.Minidle : %d - config.IdleEvictTime : %d  ", config.IdleSoftEvictTime, idleTime, idleCount, config.MinIdle, config.IdleEvictTime)
+	log.Trace().Msgf("Evict Config idle soft evict time : %d - idleTime : %d - idleCount : %d   - config.Minidle : %d - config.IdleEvictTime : %d  ", config.IdleSoftEvictTime, idleTime, idleCount, config.MinIdle, config.IdleEvictTime)
 
 	if (config.IdleSoftEvictTime < idleTime &&
 		config.MinIdle < idleCount) ||
 		config.IdleEvictTime < idleTime {
-		log.Trace().Msg("Test Evict True")
+		log.Trace().Msg("Evict True")
 		return true
 	}
-	log.Trace().Msg("Test Evict False")
+	log.Trace().Msg("Evict False")
 	return false
 }
 
@@ -104,7 +104,13 @@ func NewService(lc fx.Lifecycle, config *ConnectionConfig, metrics *Metrics, rou
 
 func ListeningClosure() {
 	for {
-		val := <-TokenChannel
+		val, ok := <-TokenChannel
+		if !ok {
+			return
+		}
+		if val == nil {
+			continue
+		}
 		log.Trace().Msg("Ricevuto Token Procedo chiusura")
 		ctgRc := C.CTG_closeGatewayConnection(val)
 		if ctgRc != C.CTG_OK {
@@ -119,16 +125,24 @@ func ListeningClosure() {
 }
 func ChannelClosure() {
 	for {
-		val := <-EciChannel
-		log.Trace().Msg("Ricevuto Eci Token Procedo cancellazione canale")
-		ctgRc := C.ECI_deleteChannel(val)
-		if ctgRc != C.ECI_NO_ERROR {
-			err := displayRc(ctgRc)
-			log.Error().Err(err).Msgf("ECI_deleteChannel call failed : %v", err)
-		} else {
-			log.Trace().Msg("Canale Eliminato")
-		}
+		select {
+		case val, ok := <-EciChannel:
+			if !ok {
+				return
+			}
+			if val == nil {
+				continue
+			}
+			log.Trace().Msg("Ricevuto Eci Token Procedo cancellazione canale")
+			ctgRc := C.ECI_deleteChannel(val)
+			if ctgRc != C.ECI_NO_ERROR {
+				err := displayRc(ctgRc)
+				log.Error().Err(err).Msgf("ECI_deleteChannel call failed : %v", err)
+			} else {
+				log.Trace().Msg("Canale Eliminato")
+			}
 
+		}
 	}
 }
 

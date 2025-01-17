@@ -55,9 +55,8 @@ func (cr *Routine[I, O]) TransactV3(ctx context.Context, connection *Connection,
 	if errTransaction != nil {
 		return nil, core.TechnicalErrorWithError(errTransaction)
 	}
-	errCO := cr.checkOutputContainer(ic)
-	if errCO != nil {
-		return nil, core.TechnicalErrorWithError(errCO)
+	if errCO := cr.checkOutputContainer(ic); errCO != nil {
+		return nil, errCO
 	}
 	return cr.GenerateOutputFromOutputContainer(oc)
 }
@@ -76,9 +75,8 @@ func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection,
 	if errTransaction != nil {
 		return nil, core.TechnicalErrorWithError(errTransaction)
 	}
-	errCO := cr.checkOutputContainerV2(ic)
-	if errCO != nil {
-		return nil, core.TechnicalErrorWithError(errCO)
+	if errCO := cr.checkOutputContainerV2(ic); errCO != nil {
+		return nil, errCO
 	}
 
 	return cr.GenerateOutputFromOutputContainer(oc)

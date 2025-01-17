@@ -194,7 +194,8 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.Applic
 			ErrorMessage: "no container present",
 		})
 	}
-	if len(oc[HEADER]) == 0 {
+	headerm, ok := oc[HEADER]
+	if !ok {
 		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
 			ErrorMessage: "no container header present",
@@ -202,7 +203,7 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.Applic
 	}
 
 	header := &HeaderV3{}
-	err := Unmarshal(oc[HEADER], header)
+	err := Unmarshal(headerm, header)
 	if err != nil {
 		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,

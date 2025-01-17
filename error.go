@@ -6,9 +6,9 @@ import (
 )
 
 type TransactionError struct {
-	ErrorCode     string `json:"ErrorCode" mainframe:"start=1,length=11"`
-	ErrorMessage  string `json:"ErrorMessage"  mainframe:"start=12,length=100"`
-	ErrorMessage2 string `json:"ErrorMessage2" mainframe:"start=112,length=100"`
+	ErrorCode     string `json:"ErrorCode" fixed:"1,11"`
+	ErrorMessage  string `json:"ErrorMessage" fixed:"12,111"`
+	ErrorMessage2 string `json:"ErrorMessage2" fixed:"112,211"`
 }
 
 func (t *TransactionError) Error() string {

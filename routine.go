@@ -11,11 +11,13 @@ import "C"
 import (
 	"context"
 	"fmt"
-	"github.com/GPA-Gruppo-Progetti-Avanzati-SRL/go-core-app"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"time"
 	"unsafe"
+
+	"github.com/GPA-Gruppo-Progetti-Avanzati-SRL/go-core-app"
+	"github.com/ianlopshire/go-fixedwidth"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/text/encoding/charmap"
@@ -46,7 +48,7 @@ func (cr *Routine[I, O]) TransactV3(ctx context.Context, connection *Connection,
 	if ierr != nil {
 		return nil, ierr
 	}
-	header, herr := Marshal(BuildHeaderV3(cr.RequestInfo, cr.Config))
+	header, herr := fixedwidth.Marshal(BuildHeaderV3(cr.RequestInfo, cr.Config))
 	if herr != nil {
 		return nil, core.TechnicalErrorWithError(herr)
 	}
@@ -66,7 +68,7 @@ func (cr *Routine[I, O]) TransactV2(ctx context.Context, connection *Connection,
 	if err != nil {
 		return nil, err
 	}
-	header, herr := Marshal(BuildHeaderV2(cr.RequestInfo, cr.Config))
+	header, herr := fixedwidth.Marshal(BuildHeaderV2(cr.RequestInfo, cr.Config))
 	if herr != nil {
 		return nil, core.TechnicalErrorWithError(herr)
 	}
@@ -196,7 +198,7 @@ func (cr *Routine[I, O]) checkOutputContainer(oc map[string][]byte) *core.Applic
 	}
 
 	header := &HeaderV3{}
-	err := Unmarshal(headerm, header)
+	err := fixedwidth.Unmarshal(headerm, header)
 	if err != nil {
 		return TechnicalErrorFromTransaction(cr.Config.ProgramName, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
@@ -221,7 +223,7 @@ func (cr *Routine[I, O]) checkOutputContainerV2(oc map[string][]byte) *core.Appl
 	}
 
 	header := &HeaderV2{}
-	err := Unmarshal(headerm, header)
+	err := fixedwidth.Unmarshal(headerm, header)
 	if err != nil {
 		return TechnicalErrorFromTransaction(cr.Name, &TransactionError{
 			ErrorCode:    CICSLIBERRORCODE,
@@ -257,7 +259,7 @@ func getHeaderContainer(name string, oc map[string][]byte) ([]byte, *core.Applic
 
 func getErrorContainer(s []byte) *TransactionError {
 	err := &TransactionError{}
-	errUm := Unmarshal(s, err)
+	errUm := fixedwidth.Unmarshal(s, err)
 	if errUm != nil {
 		log.Warn().Msgf("Unable to unmarshal  Error : %s", string(s))
 	}

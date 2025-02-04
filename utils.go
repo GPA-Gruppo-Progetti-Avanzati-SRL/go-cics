@@ -1,5 +1,11 @@
 package cicsservice
 
+/*
+#include  <ctgclient_eci.h>
+#include  <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+*/
 import "C"
 import (
 	"fmt"

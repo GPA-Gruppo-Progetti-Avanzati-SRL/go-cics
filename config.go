@@ -5,7 +5,7 @@ import "time"
 type ConnectionConfig struct {
 	Hostname             string        `mapstructure:"hostname"`
 	Port                 int           `mapstructure:"port"`
-	Timeout              int           `mapstructure:"timeout"`
+	Timeout              time.Duration `mapstructure:"timeout"`
 	UserName             string        `mapstructure:"username"`
 	Password             string        `mapstructure:"password"`
 	ServerName           string        `mapstructure:"servername"`

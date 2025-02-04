@@ -18,7 +18,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"time"
 	"unsafe"
 )
 
@@ -94,7 +93,7 @@ func (f *ConnectionFactory) getCicsServer(ptr *C.CTG_ConnToken_t) error {
 		port = C.int(f.Config.Port)
 	}
 	defer C.free(unsafe.Pointer(hostname))
-	ctgrg := C.CTG_openRemoteGatewayConnection(hostname, port, ptr, C.int(f.Config.Timeout))
+	ctgrg := C.CTG_openRemoteGatewayConnection(hostname, port, ptr, C.int(int(f.Config.Timeout.Seconds())))
 	if ctgrg == C.CTG_OK {
 		log.Info().Msg("Connessione CICS Avvenuta con successo")
 		return nil
@@ -145,7 +144,7 @@ func Encrypt(connectionConfig *ConnectionConfig, ready chan bool) {
 
 func startListener(connectionConfig *ConnectionConfig, tlsConfig *tls.Config, conn net.Conn) {
 	defer conn.Close()
-	conn2, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Duration(connectionConfig.Timeout) * time.Second}, "tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
+	conn2, err := tls.DialWithDialer(&net.Dialer{Timeout: connectionConfig.Timeout}, "tcp", connectionConfig.Hostname+":"+strconv.Itoa(connectionConfig.Port), tlsConfig)
 	if err != nil {
 		log.Error().Err(err).Msgf("error dialing remote addr %s", err.Error())
 		return

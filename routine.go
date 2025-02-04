@@ -11,16 +11,13 @@ import "C"
 import (
 	"context"
 	"fmt"
-	"time"
-	"unsafe"
-
 	"github.com/GPA-Gruppo-Progetti-Avanzati-SRL/go-core-app"
 	"github.com/ianlopshire/go-fixedwidth"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
-
-	"github.com/rs/zerolog/log"
-	"golang.org/x/text/encoding/charmap"
+	"time"
+	"unsafe"
 )
 
 type Routine[I, O any] struct {
@@ -152,12 +149,12 @@ func (cr *Routine[I, O]) transact(ctx context.Context, connection *Connection, i
 		cr.Metrics.TransactionDuration.Record(ctx, time.Since(start).Milliseconds(), metric.WithAttributes(attribute.String("program", cr.Config.ProgramName)))
 	}()
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(connection.Config.Timeout+1)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, connection.Config.Timeout)
 	defer cancel()
 	var ctoken C.CTG_ConnToken_t = *connection.ConnectionToken
 	var ctgRc C.int
 	processDone := make(chan bool)
-	log.Debug().Msgf("Execute Channel Transaction with timeout %d", connection.Config.Timeout+1)
+	log.Debug().Msgf("Execute Channel Transaction with timeout %d", connection.Config.Timeout)
 	go func(ctgRc C.int) {
 		ctgRc = C.CTG_ECI_Execute_Channel(ctoken, &eciParms)
 		processDone <- true
@@ -331,9 +328,9 @@ func (cr *Routine[I, O]) getEciParams(token C.ECI_ChannelToken_t, connection *Co
 	eciParms.eci_version = C.ECI_VERSION_2A /* ECI version 2A          */
 	eciParms.eci_call_type = C.ECI_SYNC     /* Synchronous ECI call    */
 
-	eciParms.eci_extend_mode = C.ECI_NO_EXTEND                /* Non-extended call       */
-	eciParms.eci_luw_token = C.ECI_LUW_NEW                    /* Zero for a new LUW      */
-	eciParms.eci_timeout = C.short(connection.Config.Timeout) /* Timeout in seconds      */
+	eciParms.eci_extend_mode = C.ECI_NO_EXTEND                               /* Non-extended call       */
+	eciParms.eci_luw_token = C.ECI_LUW_NEW                                   /* Zero for a new LUW      */
+	eciParms.eci_timeout = C.short(int(connection.Config.Timeout.Seconds())) /* Timeout in seconds      */
 
 	programNameChar := [8]C.char{}
 	serverNameChar := [8]C.char{}
@@ -356,37 +353,4 @@ func (cr *Routine[I, O]) setAuth(eciParms *C.CTG_ECI_PARMS, user *C.char, passwd
 	eciParms.eci_userid_ptr = user
 	eciParms.eci_password_ptr = passwd
 
-}
-
-func convertToAscii(data []byte) []byte {
-	decoder := charmap.CodePage037.NewDecoder()
-	output, errorD := decoder.Bytes(data)
-	if errorD != nil {
-		log.Error().Err(errorD).Msgf("Error %s ", errorD.Error())
-	}
-	return output
-}
-
-func strCopy8(dest *[8]C.char, src string) {
-	for i, c := range src {
-		dest[i] = C.char(c)
-	}
-}
-
-func strCopy4(dest *[4]C.char, src string) {
-	for i, c := range src {
-		dest[i] = C.char(c)
-	}
-}
-
-func displayRc(ctgRc C.int) *TransactionError {
-	ptr := C.malloc(C.sizeof_char * (C.CTG_MAX_RCSTRING + 1))
-	C.memset(ptr, C.sizeof_char*(C.CTG_MAX_RCSTRING+1), 0)
-	C.CTG_getRcString(ctgRc, (*C.char)(ptr))
-	defer C.free(ptr)
-	returnString := C.GoBytes(ptr, C.sizeof_char*(C.CTG_MAX_RCSTRING+1))
-	log.Trace().Msgf("ErrorCode : %v ,ErrorMessage %s", ctgRc, ClearString(string(returnString)))
-	return &TransactionError{
-		ErrorCode: fmt.Sprintf("%v", ctgRc), ErrorMessage: ClearString(string(returnString)),
-	}
 }

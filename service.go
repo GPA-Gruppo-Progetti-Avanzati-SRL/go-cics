@@ -59,7 +59,7 @@ func NewService(lc fx.Lifecycle, config *ConnectionConfig, metrics *Metrics, rou
 		TestOnBorrow:             true,
 		TestOnReturn:             true,
 		BlockWhenExhausted:       true,
-		MinEvictableIdleTime:     time.Duration(config.MaxIdleLifeTime) * time.Second,
+		MinEvictableIdleTime:     config.MaxIdleLifeTime,
 		SoftMinEvictableIdleTime: 1,
 		NumTestsPerEvictionRun:   1,
 		EvictionPolicyName:       "CicsEvictionPolicy",
@@ -104,23 +104,25 @@ func NewService(lc fx.Lifecycle, config *ConnectionConfig, metrics *Metrics, rou
 
 func ListeningClosure() {
 	for {
-		val, ok := <-TokenChannel
-		if !ok {
-			return
-		}
-		if val == nil {
-			continue
-		}
-		log.Trace().Msg("Ricevuto Token Procedo chiusura")
-		ctgRc := C.CTG_closeGatewayConnection(val)
-		if ctgRc != C.CTG_OK {
-			err := displayRc(ctgRc)
-			log.Error().Err(err).Msgf("Failed to close connection to CICS Transaction Gateway %v", err)
+		select {
+		case val, ok := <-TokenChannel:
+			if !ok {
+				return
+			}
+			if val == nil {
+				continue
+			}
+			log.Trace().Msg("Ricevuto Token Procedo chiusura")
+			ctgRc := C.CTG_closeGatewayConnection(val)
+			if ctgRc != C.CTG_OK {
+				err := displayRc(ctgRc)
+				log.Error().Err(err).Msgf("Failed to close connection to CICS Transaction Gateway %v", err)
 
-		} else {
-			log.Trace().Msg("Closed connection to CICS Transaction Gateway")
+			} else {
+				log.Trace().Msg("Closed connection to CICS Transaction Gateway")
+			}
+			C.free(unsafe.Pointer(val))
 		}
-		C.free(unsafe.Pointer(val))
 	}
 }
 func ChannelClosure() {
